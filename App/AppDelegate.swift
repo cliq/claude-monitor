@@ -9,8 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sweeper: StaleSessionSweeper!
     private var dashboard: DashboardWindow!
     private var menuBar: MenuBarController!
-    private var bridge: TerminalBridgeProtocol = CompositeTerminalBridge(
-        providers: TerminalRegistry.installed()
+    private lazy var bridge: TerminalBridgeProtocol = CompositeTerminalBridge(
+        providers: TerminalRegistry.installed(),
+        isDisabled: { [weak self] bundleID in
+            self?.preferences.disabledTerminalBundleIDs.contains(bundleID) ?? false
+        }
     )
     private var onboardingWindow: NSWindow?
 

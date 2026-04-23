@@ -6,19 +6,26 @@ import Darwin
 /// and returns on the first `.focused`. Non-running providers are skipped.
 final class CompositeTerminalBridge: TerminalBridgeProtocol {
     private let providers: [TerminalProvider]
+    private let isDisabled: (String) -> Bool
 
-    init(providers: [TerminalProvider]) {
+    /// - Parameters:
+    ///   - providers: Ordered list. First `.focused` wins.
+    ///   - isDisabled: Given a bundle ID, returns true if the user has opted it out.
+    init(providers: [TerminalProvider],
+         isDisabled: @escaping (String) -> Bool = { _ in false }) {
         self.providers = providers
+        self.isDisabled = isDisabled
     }
 
     func focus(tty: String, expectedPid: Int32) -> FocusResult {
-        if providers.isEmpty { return .terminalNotRunning }
+        let enabled = providers.filter { !isDisabled($0.bundleID) }
+        if enabled.isEmpty { return .terminalNotRunning }
 
         // `kill(pid, 0)` returns 0 if the process exists. ESRCH means really gone;
         // EPERM means alive but owned elsewhere. Only ESRCH is a stale session.
         if kill(expectedPid, 0) != 0 && errno == ESRCH { return .noSuchTab }
 
-        let running = providers.filter { $0.isRunning() }
+        let running = enabled.filter { $0.isRunning() }
         if running.isEmpty { return .terminalNotRunning }
 
         var lastError: FocusResult?

@@ -93,4 +93,30 @@ final class CompositeTerminalBridgeTests: XCTestCase {
         XCTAssertEqual(result, .noSuchTab)
         XCTAssertEqual(provider.focusCallCount, 0)
     }
+
+    func test_disabledBundleID_filtersProvider() {
+        let off = FakeTerminalProvider(displayName: "A", bundleID: "off",
+                                       focusHandler: { _, _ in
+            XCTFail("disabled provider must not be called")
+            return .focused
+        })
+        let on = FakeTerminalProvider(displayName: "B", bundleID: "on",
+                                      focusHandler: { _, _ in .focused })
+        let bridge = CompositeTerminalBridge(
+            providers: [off, on],
+            isDisabled: { $0 == "off" }
+        )
+        XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
+    }
+
+    func test_allDisabled_returnsTerminalNotRunning() {
+        let p = FakeTerminalProvider(displayName: "A", bundleID: "a",
+                                     focusHandler: { _, _ in .focused })
+        let bridge = CompositeTerminalBridge(
+            providers: [p],
+            isDisabled: { _ in true }
+        )
+        XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid),
+                       .terminalNotRunning)
+    }
 }
