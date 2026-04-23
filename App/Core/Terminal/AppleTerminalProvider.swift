@@ -19,6 +19,9 @@ final class AppleTerminalProvider: TerminalProvider {
     }
 
     func focus(tty: String, expectedPid: Int32) -> FocusResult {
+        // `expectedPid` is consumed upstream by `CompositeTerminalBridge` (kill/ESRCH).
+        // Terminal.app's AppleScript dictionary exposes `processes of t` as strings,
+        // not process descriptors, so we can't re-verify the pid here even if we wanted to.
         let script = Self.buildScript(tty: tty)
         var errorInfo: NSDictionary?
         let appleScript = NSAppleScript(source: script)
