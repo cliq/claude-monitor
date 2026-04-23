@@ -6,7 +6,7 @@ import Network
 final class EventServer {
     private let onEvent: (HookEvent) -> Void
     private var listener: NWListener?
-    private let queue = DispatchQueue(label: "com.leolobato.claudemonitor.eventserver")
+    private let queue = DispatchQueue(label: "com.cliqconsulting.claudemonitor.eventserver")
 
     /// Live port after `start()`. Nil before or on failure.
     private(set) var port: UInt16?
