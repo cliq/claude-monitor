@@ -6,14 +6,12 @@ import Foundation
 ///
 /// To add another terminal: implement a `TerminalProvider` and add it to `all`.
 enum TerminalRegistry {
-    static func all() -> [TerminalProvider] {
-        [
-            AppleTerminalProvider(),
-            ITerm2Provider(),
-        ]
-    }
+    static let all: [TerminalProvider] = [
+        AppleTerminalProvider(),
+        ITerm2Provider(),
+    ]
 
     static func installed() -> [TerminalProvider] {
-        all().filter { $0.isInstalled }
+        all.filter { $0.isInstalled }
     }
 }
