@@ -22,6 +22,7 @@ TTY_VAL="$(tty 2>/dev/null)"
 PID_VAL="$PPID"   # the claude process that invoked us
 CWD_VAL="$(pwd)"
 TS_VAL="$(date +%s)"
+export HOOK_NAME STDIN_JSON TTY_VAL PID_VAL CWD_VAL TS_VAL
 
 # Build JSON — use python for safe escaping if available, otherwise a minimal fallback.
 if command -v python3 >/dev/null 2>&1; then

@@ -16,9 +16,6 @@ targets:
     platform: macOS
     sources:
       - path: App
-    resources:
-      - path: scripts/hook.sh
-        optional: true
     info:
       path: App/Info.plist
       properties:
@@ -33,6 +30,8 @@ targets:
     platform: macOS
     sources:
       - path: Tests
+      - path: scripts/hook.sh
+        buildPhase: resources
     dependencies:
       - target: ClaudeMonitor
     settings:
