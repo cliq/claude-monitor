@@ -1,0 +1,50 @@
+name: ClaudeMonitor
+options:
+  bundleIdPrefix: com.leolobato.claudemonitor
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  ClaudeMonitor:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    resources:
+      - path: scripts/hook.sh
+        optional: true
+    info:
+      path: App/Info.plist
+      properties:
+        LSUIElement: false
+        NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app tab of a selected Claude Code session."
+    settings:
+      base:
+        PRODUCT_NAME: ClaudeMonitor
+        PRODUCT_BUNDLE_IDENTIFIER: com.leolobato.claudemonitor
+  ClaudeMonitorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: ClaudeMonitor
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  ClaudeMonitorIntegrationTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: IntegrationTests
+    dependencies:
+      - target: ClaudeMonitor
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
