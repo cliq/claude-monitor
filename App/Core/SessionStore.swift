@@ -62,4 +62,12 @@ final class SessionStore: ObservableObject {
         orderedSessions[idx].state = .finished
         orderedSessions[idx].enteredStateAt = clock.now()
     }
+
+    /// Reorder by id. Out-of-range indices are clamped. Unknown ids are ignored.
+    func move(sessionId: String, toIndex requested: Int) {
+        guard let from = orderedSessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        let session = orderedSessions.remove(at: from)
+        let clamped = max(0, min(requested, orderedSessions.count))
+        orderedSessions.insert(session, at: clamped)
+    }
 }
