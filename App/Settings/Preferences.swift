@@ -15,7 +15,7 @@ final class Preferences: ObservableObject {
     }
 
     @Published var disabledTerminalBundleIDs: Set<String> {
-        didSet { defaults.set(Array(disabledTerminalBundleIDs), forKey: Self.disabledTerminalsKey) }
+        didSet { defaults.set(disabledTerminalBundleIDs.sorted(), forKey: Self.disabledTerminalsKey) }
     }
 
     var hasOnboarded: Bool {
