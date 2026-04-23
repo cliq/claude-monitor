@@ -16,6 +16,8 @@ targets:
     platform: macOS
     sources:
       - path: App
+      - path: scripts/hook.sh
+        buildPhase: resources
     info:
       path: App/Info.plist
       properties:

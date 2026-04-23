@@ -2,7 +2,10 @@
 import Foundation
 
 enum HookInstaller {
-    static let currentVersion = 1
+    /// Bumped to 2 when the managed block was rewritten to match Claude Code's real
+    /// `{matcher, hooks: [{type, command}]}` schema. v1 entries (flat `{command}`) are
+    /// detected as `.outdated` so users can one-click Reinstall to recover.
+    static let currentVersion = 2
     private static let managedKey = "_managedBy"
     private static let managedValue = "claude-monitor"
     private static let versionKey = "_version"
@@ -33,8 +36,16 @@ enum HookInstaller {
             if managed.isEmpty { anyMissing = true; continue }
             let expectedCmd = expectedCommand(for: hook)
             for entry in managed {
-                if let v = entry[versionKey] as? Int { versions.append(v) }
-                if (entry["command"] as? String) != expectedCmd { anyModified = true }
+                let v = (entry[versionKey] as? Int) ?? 0
+                versions.append(v)
+                // Only check the command content when the entry is at the current schema
+                // version. Older versions used a different shape (e.g. v1's flat `command`
+                // vs v2's nested `hooks: [{type, command}]`), so a "mismatch" there is
+                // really just "outdated", not a user-authored modification.
+                guard v == currentVersion else { continue }
+                let innerHooks = (entry["hooks"] as? [[String: Any]]) ?? []
+                let innerCmd = innerHooks.first?["command"] as? String
+                if innerCmd != expectedCmd { anyModified = true }
             }
         }
 
@@ -61,10 +72,19 @@ enum HookInstaller {
         for hook in allHooks {
             var entries = (hooks[hook] as? [[String: Any]]) ?? []
             entries.removeAll { $0[managedKey] as? String == managedValue }
+            let command: [String: Any] = [
+                "type": "command",
+                "command": expectedCommand(for: hook),
+            ]
+            // Shape matches Claude Code's hook schema:
+            //   { matcher: "", hooks: [{ type: "command", command: "..." }] }
+            // Metadata keys (_managedBy, _version) live alongside matcher/hooks on the
+            // same object — Claude Code's validator ignores unknown keys.
             let managed: [String: Any] = [
                 managedKey: managedValue,
                 versionKey: currentVersion,
-                "command": expectedCommand(for: hook),
+                "matcher": "",
+                "hooks": [command],
             ]
             entries.append(managed)
             hooks[hook] = entries
