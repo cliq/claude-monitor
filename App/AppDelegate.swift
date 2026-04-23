@@ -35,10 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
         }
 
-        // 3. 1Hz tick for tile timers + 60s stale sweep.
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.store.tickRemovalTimer()
-        }
+        // 3. 60s stale sweep.
         sweeper = StaleSessionSweeper(store: store)
         sweeper.start()
 

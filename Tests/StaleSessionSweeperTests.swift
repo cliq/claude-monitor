@@ -8,7 +8,7 @@ final class StaleSessionSweeperTests: XCTestCase {
                   cwd: "/p/\(session)", ts: 0, promptPreview: nil, toolName: nil)
     }
 
-    func test_sweepMarksDeadProcessSessionsFinished() {
+    func test_sweepRemovesDeadProcessSessions() {
         let store = SessionStore(clock: FakeClock())
         // My own PID = live.
         store.apply(event(session: "live", pid: ProcessInfo.processInfo.processIdentifier))
@@ -18,19 +18,7 @@ final class StaleSessionSweeperTests: XCTestCase {
         let sweeper = StaleSessionSweeper(store: store)
         sweeper.sweep()
 
-        let byId = Dictionary(uniqueKeysWithValues: store.orderedSessions.map { ($0.id, $0.state) })
-        XCTAssertEqual(byId["live"], .waiting)  // unchanged
-        XCTAssertEqual(byId["dead"], .finished) // swept
-    }
-
-    func test_sweepIgnoresAlreadyFinishedSessions() {
-        let store = SessionStore(clock: FakeClock())
-        store.apply(event(session: "done", pid: 2_147_483_000, hook: .sessionStart))
-        store.apply(event(session: "done", pid: 2_147_483_000, hook: .sessionEnd))
-        let before = store.orderedSessions[0].enteredStateAt
-
-        StaleSessionSweeper(store: store).sweep()
-        XCTAssertEqual(store.orderedSessions[0].enteredStateAt, before,
-                       "already-finished sessions must not have enteredStateAt bumped")
+        let ids = store.orderedSessions.map(\.id)
+        XCTAssertEqual(ids, ["live"], "dead session should be removed; live session should remain")
     }
 }
