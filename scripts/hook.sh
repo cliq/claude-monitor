@@ -16,9 +16,18 @@ PORT="$(tr -d ' \n\r' < "$PORT_FILE")"
 STDIN_JSON="$(cat 2>/dev/null)"
 [ -n "$STDIN_JSON" ] || STDIN_JSON="{}"
 
-# Context capture
-TTY_VAL="$(tty 2>/dev/null)"
-[ -n "$TTY_VAL" ] && [ "$TTY_VAL" != "not a tty" ] || TTY_VAL=""
+# Context capture.
+# TTY: Claude Code invokes us with the hook JSON piped on stdin, so `tty` on our
+# own fd never works. Ask the kernel for the parent claude CLI's controlling
+# terminal instead — that's the ttys device backing the Terminal.app tab.
+TTY_RAW="$(ps -o tty= -p "$PPID" 2>/dev/null | awk '{print $1}')"
+case "$TTY_RAW" in
+  ""|\?|\?\?)   TTY_VAL="" ;;
+  /dev/*)       TTY_VAL="$TTY_RAW" ;;
+  tty*)         TTY_VAL="/dev/$TTY_RAW" ;;
+  s[0-9]*|p[0-9]*) TTY_VAL="/dev/tty$TTY_RAW" ;;
+  *)            TTY_VAL="/dev/$TTY_RAW" ;;
+esac
 PID_VAL="$PPID"   # the claude process that invoked us
 CWD_VAL="$(pwd)"
 TS_VAL="$(date +%s)"

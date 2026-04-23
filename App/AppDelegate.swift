@@ -65,10 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch result {
         case .focused:
             break
-        case .noSuchTab, .terminalNotRunning:
-            store.markFinished(sessionId: session.id)
+        case .noSuchTab:
+            NSLog("TerminalBridge: no tab matched tty=\(session.tty) pid=\(session.pid)")
+            NSSound.beep()
+        case .terminalNotRunning:
+            NSLog("TerminalBridge: Terminal.app is not running; cannot focus tty=\(session.tty)")
+            NSSound.beep()
         case .scriptError(let message):
             NSLog("TerminalBridge script error: \(message)")
+            NSSound.beep()
         }
     }
 

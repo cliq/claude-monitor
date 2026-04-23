@@ -14,8 +14,10 @@ final class TerminalBridge: TerminalBridgeProtocol {
         }
 
         // 2. Swift-side pid liveness check (part of the TTY-reuse guard).
-        //    If the recorded `claude` process is gone, the tty is stale — skip AppleScript.
-        if kill(expectedPid, 0) != 0 {
+        //    `kill(pid, 0)` returns 0 if the process exists and we may signal it. On
+        //    failure, errno distinguishes ESRCH (really gone) from EPERM (alive, but
+        //    owned elsewhere). Only ESRCH means the session is stale.
+        if kill(expectedPid, 0) != 0 && errno == ESRCH {
             return .noSuchTab
         }
 
