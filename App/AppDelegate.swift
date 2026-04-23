@@ -43,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let content = DashboardView(store: store, onClickSession: { [weak self] session in
             self?.handleClick(on: session)
         })
-        dashboard = DashboardWindow(rootView: content)
+        dashboard = DashboardWindow(rootView: content, store: store)
 
         // 5. Menu bar.
         menuBar = MenuBarController(

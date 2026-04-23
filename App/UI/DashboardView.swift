@@ -37,7 +37,6 @@ struct DashboardView: View {
                 .padding(0)
             }
         }
-        .frame(minWidth: 200, minHeight: 120)
         .onReceive(ticker) { now = $0 }
         .onChange(of: store.orderedSessions) { _, new in
             flashIds = flashCoordinator.update(sessions: new)
@@ -48,7 +47,7 @@ struct DashboardView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Text("No sessions")
                 .font(.headline)
             Text("Start a Claude Code session in a terminal to see it here.")
@@ -56,7 +55,9 @@ struct DashboardView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(40)
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .padding(8)
     }
 }
 
