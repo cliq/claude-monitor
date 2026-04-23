@@ -1,0 +1,91 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting Terminal.app tab. Only Terminal.app is supported — not iTerm, not VS Code terminals.
+
+The full design lives at `docs/superpowers/specs/2026-04-23-claude-monitor-design.md` and is the source of truth for product behavior; defer to it when behavior is ambiguous.
+
+## Build / test
+
+The Xcode project is **generated** — `ClaudeMonitor.xcodeproj/` and `App/Info.plist` are gitignored. Run `make gen` (wraps `xcodegen`) before opening in Xcode or running any `xcodebuild` command after pulling or editing `project.yml`.
+
+```
+make gen             # regenerate ClaudeMonitor.xcodeproj from project.yml
+make open            # gen + open in Xcode
+make test            # unit tests: scheme ClaudeMonitorTests, destination macOS
+make test-integration  # integration tests (ClaudeMonitorIntegrationTests) — hits real AppleScript / Terminal.app
+make clean           # remove generated .xcodeproj
+```
+
+Run a single test from the CLI:
+
+```
+xcodebuild test -project ClaudeMonitor.xcodeproj -scheme ClaudeMonitor \
+  -destination 'platform=macOS' \
+  -only-testing:ClaudeMonitorTests/StateMachineTests/testTransitionFromWorkingOnStop
+```
+
+The UI test target (`ClaudeMonitorUITests`) is currently skipped on Xcode 26.3 beta — see commit `d4441dd`.
+
+## Architecture
+
+### Event pipeline
+
+```
+Claude Code fires hook
+  → scripts/hook.sh (installed to ~/.claude-monitor/hook.sh)
+    reads stdin JSON, enriches with tty/pid/cwd/ts
+  → curl -m 2 POST http://127.0.0.1:<port>/event
+  → EventServer (Network.framework NWListener, bound to 127.0.0.1:0)
+  → SessionStore.apply(_: HookEvent)
+  → StateMachine.transition(from:for:)
+  → @Published orderedSessions → SwiftUI
+```
+
+Events are decoded on the server's private queue, then dispatched onto the main queue before touching `SessionStore` (see `AppDelegate.applicationDidFinishLaunching`). Keep it that way — `SessionStore` is not thread-safe.
+
+### Runtime filesystem layout
+
+Everything the app writes outside the sandbox goes under `~/.claude-monitor/`:
+
+- `hook.sh` — copied from the app bundle by `HookScriptDeployer`. Must be `0755`.
+- `port` — ephemeral TCP port the server is listening on, written atomically (`.tmp` + rename) by `PortFileWriter`.
+- `pid` — single-instance lockfile checked by `SingleInstanceGuard` with `kill(pid, 0)`.
+
+Hook entries are installed **into the user's Claude config directories**, not this one. `HookInstaller` edits `<configDir>/settings.json` (e.g. `~/.claude/settings.json`, `~/.claudewho-work/settings.json`) and only touches objects tagged `"_managedBy": "claude-monitor"`. `ConfigDirectoryDiscovery` auto-finds these by matching `.claude` or `.claudewho-*`.
+
+### State machine
+
+`App/Core/StateMachine.swift` is a pure function — keep it that way so the table-driven tests stay meaningful. States are `working | waiting | needsYou | finished`. `finished` is absorbing and triggers removal from the store. Unknown sessions synthesize `SessionStart` (→ `waiting`) so the tile still appears when the app launches after Claude sessions are already running.
+
+### Hook schema versioning
+
+`HookInstaller.currentVersion` gates the schema of the managed block in `settings.json`. Bumping it flips previously-installed directories to `.outdated`, surfacing a one-click reinstall in Settings. **When changing what the installer writes, bump this number** and make sure the comparison in `inspect(configDir:)` still only compares commands at the current version — v1 used a flat `{command}` shape, v2 uses Claude Code's real `{matcher, hooks: [{type, command}]}` schema. See commit `989c15e`.
+
+`HookInstaller` always copies `<path>/settings.json` to `settings.json.bak` before writing (single rolling backup).
+
+### TerminalBridge
+
+`TerminalBridge.focus(tty:expectedPid:)` is the only place the app talks to Terminal.app. Three guards, **all required**, because macOS recycles `/dev/ttysNNN` devices when tabs close:
+
+1. `NSWorkspace.runningApplications` check that Terminal is running.
+2. `kill(expectedPid, 0)` — ESRCH means the session is really gone.
+3. AppleScript match on `tty of t`.
+
+Unit tests use `TerminalBridgeProtocol` with a fake; the real AppleScript path only runs under `make test-integration`.
+
+### SwiftUI layout
+
+The grid is a **custom SwiftUI `Layout`** (`VerticalFirstGridLayout`), not `LazyVGrid` — tiles flow column-major (top-to-bottom then wrap right), which `LazyVGrid` can't do. Don't replace it with a stock grid.
+
+The dashboard uses a single 1 Hz `Timer.publish` in `DashboardView` to drive all tile elapsed-time labels. Don't add per-tile timers.
+
+## Conventions particular to this repo
+
+- `scripts/hook.sh` is a **build resource** (see `project.yml`) for both the app and the test bundle — `HookScriptDeployer` finds it via `Bundle.main` first, then falls back to the test bundle. Don't inline its contents into Swift; edit the file.
+- Set `CLAUDE_MONITOR_SKIP_ONBOARDING=1` in a scheme's environment (or `launchEnvironment`) to skip the first-run sheet in UI tests.
+- `project.yml` disables hardened runtime (`ENABLE_HARDENED_RUNTIME: NO`) deliberately — the app needs to send Apple events to Terminal. Don't flip it on without plumbing entitlements.
+- Fixture JSON for `HookInstallerTests` lives at `Tests/Fixtures/` and is bundled into the test target.
