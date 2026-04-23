@@ -2,6 +2,8 @@ import XCTest
 @testable import ClaudeMonitor
 
 final class TerminalBridgeIntegrationTests: XCTestCase {
+    private let provider = AppleTerminalProvider()
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         if ProcessInfo.processInfo.environment["RUN_TERMINAL_INTEGRATION"] != "1" {
@@ -10,7 +12,6 @@ final class TerminalBridgeIntegrationTests: XCTestCase {
     }
 
     func test_focusTabByTTY() throws {
-        // Open a Terminal tab running a long-lived command; capture its tty.
         let open = """
         tell application "Terminal"
             activate
@@ -24,17 +25,12 @@ final class TerminalBridgeIntegrationTests: XCTestCase {
         XCTAssertNil(err, "setup AppleScript failed: \(String(describing: err))")
         let tty = try XCTUnwrap(descriptor?.stringValue)
 
-        // Open a second tab so the first isn't frontmost.
         let openSecond = #"tell application "Terminal" to do script "echo other""#
         _ = NSAppleScript(source: openSecond)?.executeAndReturnError(nil)
 
-        // Exercise the bridge. Use the test-runner's own pid as `expectedPid` —
-        // it's definitely alive, so the Swift-side kill(pid,0) guard passes.
-        let bridge = TerminalBridge()
-        let result = bridge.focus(tty: tty, expectedPid: ProcessInfo.processInfo.processIdentifier)
+        let result = provider.focus(tty: tty, expectedPid: ProcessInfo.processInfo.processIdentifier)
         XCTAssertEqual(result, .focused)
 
-        // Cleanup: close the tab by tty.
         let cleanup = """
         tell application "Terminal"
             close (every window whose tty of selected tab is "\(tty)")
@@ -43,11 +39,15 @@ final class TerminalBridgeIntegrationTests: XCTestCase {
         _ = NSAppleScript(source: cleanup)?.executeAndReturnError(nil)
     }
 
-    func test_focusReturnsNoSuchTabWhenPidIsDead() {
-        // Any pid that can't possibly be alive.
-        let result = TerminalBridge().focus(tty: "/dev/ttys999", expectedPid: 2_147_483_000)
-        // Either Terminal-not-running or noSuchTab is acceptable; both are "don't focus".
-        XCTAssertTrue(result == .noSuchTab || result == .terminalNotRunning,
-                      "expected noSuchTab or terminalNotRunning, got \(result)")
+    func test_focusReturnsNoSuchTabForUnknownTTY() {
+        let result = AppleTerminalProvider().focus(tty: "/dev/ttys999",
+                                                    expectedPid: ProcessInfo.processInfo.processIdentifier)
+        let isAcceptable: Bool = {
+            if result == .noSuchTab { return true }
+            if case .scriptError = result { return true }
+            return false
+        }()
+        XCTAssertTrue(isAcceptable,
+                      "expected noSuchTab (or scriptError if Terminal isn't running), got \(result)")
     }
 }

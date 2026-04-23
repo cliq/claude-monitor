@@ -9,7 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sweeper: StaleSessionSweeper!
     private var dashboard: DashboardWindow!
     private var menuBar: MenuBarController!
-    private var bridge: TerminalBridgeProtocol = TerminalBridge()
+    private var bridge: TerminalBridgeProtocol = CompositeTerminalBridge(
+        providers: TerminalRegistry.installed()
+    )
     private var onboardingWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
