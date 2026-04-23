@@ -49,3 +49,13 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+  ClaudeMonitorUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: ClaudeMonitor
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

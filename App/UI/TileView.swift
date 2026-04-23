@@ -38,6 +38,8 @@ struct TileView: View {
         }
         .frame(width: 160, height: 80)
         .contentShape(Rectangle())
+        .accessibilityLabel(session.projectName)
+        .accessibilityIdentifier("tile-\(session.projectName)")
     }
 
     private var elapsed: String {
