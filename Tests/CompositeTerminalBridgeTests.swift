@@ -6,15 +6,19 @@ final class CompositeTerminalBridgeTests: XCTestCase {
     // explicitly overridden.
     private var livePid: Int32 { ProcessInfo.processInfo.processIdentifier }
 
+    private func makeBridge(_ providers: [TerminalProvider]) -> CompositeTerminalBridge {
+        CompositeTerminalBridge(providers: providers, isDisabled: { _ in false })
+    }
+
     func test_emptyProviders_returnsTerminalNotRunning() {
-        let bridge = CompositeTerminalBridge(providers: [])
+        let bridge = makeBridge([])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .terminalNotRunning)
     }
 
     func test_singleProviderFocused() {
         let p = FakeTerminalProvider(displayName: "X", bundleID: "x",
                                      focusHandler: { _, _ in .focused })
-        let bridge = CompositeTerminalBridge(providers: [p])
+        let bridge = makeBridge([p])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
         XCTAssertEqual(p.focusCallCount, 1)
     }
@@ -24,7 +28,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
                                       focusHandler: { _, _ in .noSuchTab })
         let p2 = FakeTerminalProvider(displayName: "B", bundleID: "b",
                                       focusHandler: { _, _ in .focused })
-        let bridge = CompositeTerminalBridge(providers: [p1, p2])
+        let bridge = makeBridge([p1, p2])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
         XCTAssertEqual(p1.focusCallCount, 1)
         XCTAssertEqual(p2.focusCallCount, 1)
@@ -35,7 +39,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
                                       focusHandler: { _, _ in .noSuchTab })
         let p2 = FakeTerminalProvider(displayName: "B", bundleID: "b",
                                       focusHandler: { _, _ in .noSuchTab })
-        let bridge = CompositeTerminalBridge(providers: [p1, p2])
+        let bridge = makeBridge([p1, p2])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .noSuchTab)
     }
 
@@ -44,7 +48,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
                                       focusHandler: { _, _ in .scriptError("first") })
         let p2 = FakeTerminalProvider(displayName: "B", bundleID: "b",
                                       focusHandler: { _, _ in .scriptError("second") })
-        let bridge = CompositeTerminalBridge(providers: [p1, p2])
+        let bridge = makeBridge([p1, p2])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid),
                        .scriptError("second"))
     }
@@ -54,7 +58,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
                                       focusHandler: { _, _ in .focused })
         let p2 = FakeTerminalProvider(displayName: "B", bundleID: "b",
                                       focusHandler: { _, _ in .focused })
-        let bridge = CompositeTerminalBridge(providers: [p1, p2])
+        let bridge = makeBridge([p1, p2])
         _ = bridge.focus(tty: "/dev/ttys001", expectedPid: livePid)
         XCTAssertEqual(p1.focusCallCount, 1)
         XCTAssertEqual(p2.focusCallCount, 0)
@@ -69,14 +73,14 @@ final class CompositeTerminalBridgeTests: XCTestCase {
         })
         let active = FakeTerminalProvider(displayName: "B", bundleID: "b",
                                           focusHandler: { _, _ in .focused })
-        let bridge = CompositeTerminalBridge(providers: [skipped, active])
+        let bridge = makeBridge([skipped, active])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
     }
 
     func test_allProvidersNotRunning_returnsTerminalNotRunning() {
         let p = FakeTerminalProvider(displayName: "A", bundleID: "a",
                                      runningHandler: { false })
-        let bridge = CompositeTerminalBridge(providers: [p])
+        let bridge = makeBridge([p])
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid),
                        .terminalNotRunning)
     }
@@ -87,7 +91,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
             XCTFail("should not call focus when pid is dead (ESRCH)")
             return .focused
         })
-        let bridge = CompositeTerminalBridge(providers: [provider])
+        let bridge = makeBridge([provider])
         // An int32 near max is astronomically unlikely to be a live pid.
         let result = bridge.focus(tty: "/dev/ttys001", expectedPid: 2_147_483_000)
         XCTAssertEqual(result, .noSuchTab)
@@ -107,6 +111,7 @@ final class CompositeTerminalBridgeTests: XCTestCase {
             isDisabled: { $0 == "off" }
         )
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
+        XCTAssertEqual(on.focusCallCount, 1)
     }
 
     func test_allDisabled_returnsTerminalNotRunning() {

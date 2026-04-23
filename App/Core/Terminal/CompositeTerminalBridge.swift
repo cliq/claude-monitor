@@ -12,7 +12,7 @@ final class CompositeTerminalBridge: TerminalBridgeProtocol {
     ///   - providers: Ordered list. First `.focused` wins.
     ///   - isDisabled: Given a bundle ID, returns true if the user has opted it out.
     init(providers: [TerminalProvider],
-         isDisabled: @escaping (String) -> Bool = { _ in false }) {
+         isDisabled: @escaping (String) -> Bool) {
         self.providers = providers
         self.isDisabled = isDisabled
     }
