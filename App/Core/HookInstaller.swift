@@ -111,15 +111,25 @@ enum HookInstaller {
     }
 
     private static func saveJson(_ json: [String: Any], to url: URL) throws {
+        // Snapshot the existing file as <path>.bak before writing, so the previous
+        // contents can be recovered manually if an install goes wrong. Only one
+        // rolling backup is kept — the state immediately before the most recent write.
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) {
+            let backup = url.appendingPathExtension("bak")
+            _ = try? fm.removeItem(at: backup)
+            try? fm.copyItem(at: url, to: backup)
+        }
+
         // Write with sorted keys + pretty printing for stable diffs.
         let data = try JSONSerialization.data(withJSONObject: json,
                                               options: [.prettyPrinted, .sortedKeys])
         let tmp = url.appendingPathExtension("tmp")
         try data.write(to: tmp, options: .atomic)
-        if FileManager.default.fileExists(atPath: url.path) {
-            _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
+        if fm.fileExists(atPath: url.path) {
+            _ = try fm.replaceItemAt(url, withItemAt: tmp)
         } else {
-            try FileManager.default.moveItem(at: tmp, to: url)
+            try fm.moveItem(at: tmp, to: url)
         }
     }
 }

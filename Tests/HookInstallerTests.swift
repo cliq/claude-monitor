@@ -95,4 +95,38 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(start.first?["command"] as? String, "echo user-owned-hook")
         XCTAssertNil(hooks["UserPromptSubmit"])   // was only managed — hook key removed
     }
+
+    func test_installWritesBackupOfPreviousSettings() throws {
+        let path = try writeSettings("settings-with-other-hooks")
+        let originalBytes = try Data(contentsOf: path)
+
+        try HookInstaller.install(configDir: dir)
+
+        let backup = path.appendingPathExtension("bak")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backup.path),
+                      "expected settings.json.bak beside settings.json")
+        let backupBytes = try Data(contentsOf: backup)
+        XCTAssertEqual(backupBytes, originalBytes,
+                       "backup must capture the file contents as they were before install")
+    }
+
+    func test_installOnFreshConfigDirDoesNotCreateBackup() throws {
+        // No settings.json yet — there's nothing to back up.
+        try HookInstaller.install(configDir: dir)
+        let backup = dir.appendingPathComponent("settings.json.bak")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: backup.path),
+                       "no backup should be created when there was no prior file")
+    }
+
+    func test_secondInstallOverwritesBackupWithLatestPreInstallState() throws {
+        let path = try writeSettings("settings-empty")
+        try HookInstaller.install(configDir: dir)          // first install; backup captures empty {}
+        let afterFirstInstallBytes = try Data(contentsOf: path)
+
+        try HookInstaller.install(configDir: dir)          // second install; backup should now be post-first-install state
+        let backup = path.appendingPathExtension("bak")
+        let backupBytes = try Data(contentsOf: backup)
+        XCTAssertEqual(backupBytes, afterFirstInstallBytes,
+                       "rolling backup must reflect state immediately before the most recent write")
+    }
 }

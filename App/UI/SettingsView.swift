@@ -70,9 +70,22 @@ struct SettingsView: View {
             try HookScriptDeployer.deploy()
             try HookInstaller.install(configDir: dir)
             refresh()
+            showInstallSuccess(settingsFile: dir.appendingPathComponent("settings.json"))
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func showInstallSuccess(settingsFile: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Hooks installed"
+        alert.informativeText = """
+        Modified: \(settingsFile.path)
+
+        A backup of the previous contents was saved alongside as settings.json.bak.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func remove(_ entry: ManagedConfigDirectory) {

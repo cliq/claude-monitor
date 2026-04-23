@@ -1,5 +1,6 @@
 // App/UI/OnboardingView.swift
 import SwiftUI
+import AppKit
 
 struct OnboardingView: View {
     @ObservedObject var preferences: Preferences
@@ -62,14 +63,33 @@ struct OnboardingView: View {
     private func install() {
         do {
             try HookScriptDeployer.deploy()
-            for dir in selected {
+            var modifiedFiles: [URL] = []
+            for dir in selected.sorted(by: { $0.path < $1.path }) {
+                let settingsFile = dir.appendingPathComponent("settings.json")
                 try HookInstaller.install(configDir: dir)
+                modifiedFiles.append(settingsFile)
             }
             preferences.managedConfigDirectoryPaths = Array(selected.map(\.path)).sorted()
             preferences.hasOnboarded = true
+            showInstallSuccess(modifiedFiles: modifiedFiles)
             onFinished()
         } catch {
             errorMessage = "Install failed: \(error.localizedDescription)"
         }
+    }
+
+    private func showInstallSuccess(modifiedFiles: [URL]) {
+        let alert = NSAlert()
+        alert.messageText = "Hooks installed"
+        let fileList = modifiedFiles.map { "  • \($0.path)" }.joined(separator: "\n")
+        alert.informativeText = """
+        The following settings files were modified:
+
+        \(fileList)
+
+        A backup of each file's previous contents was saved alongside it as settings.json.bak.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
