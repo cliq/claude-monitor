@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var preferences: Preferences
     @State private var directoriesWithStatus: [ManagedConfigDirectory] = []
     @State private var errorMessage: String?
+    @State private var installedTerminals: [TerminalProvider] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -48,13 +49,47 @@ struct SettingsView: View {
                 Spacer()
             }
 
+            Divider().padding(.vertical, 6)
+
+            Text("Terminal applications").font(.headline)
+            Text("Claude Monitor auto-detects which app hosts each Claude session. Uncheck to skip a terminal when focusing tabs.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if installedTerminals.isEmpty {
+                Text("No supported terminal applications installed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(installedTerminals, id: \.bundleID) { provider in
+                    Toggle(isOn: terminalBinding(for: provider.bundleID)) {
+                        HStack {
+                            Text(provider.displayName)
+                            Text("(\(provider.bundleID))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                }
+
+                if allTerminalsDisabled {
+                    Text("No terminal enabled — clicking a tile won't focus anything.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(.red).font(.footnote)
             }
         }
         .padding(20)
-        .frame(width: 560, height: 420)
-        .onAppear { refresh() }
+        .frame(width: 560, height: 560)
+        .onAppear {
+            refresh()
+            installedTerminals = TerminalRegistry.installed()
+        }
     }
 
     private func refresh() {
@@ -164,5 +199,23 @@ struct SettingsView: View {
         case .outdated:           return .orange
         case .modifiedExternally: return .orange
         }
+    }
+
+    private var allTerminalsDisabled: Bool {
+        guard !installedTerminals.isEmpty else { return false }
+        return installedTerminals.allSatisfy { preferences.disabledTerminalBundleIDs.contains($0.bundleID) }
+    }
+
+    private func terminalBinding(for bundleID: String) -> Binding<Bool> {
+        Binding(
+            get: { !preferences.disabledTerminalBundleIDs.contains(bundleID) },
+            set: { newValue in
+                if newValue {
+                    preferences.disabledTerminalBundleIDs.remove(bundleID)
+                } else {
+                    preferences.disabledTerminalBundleIDs.insert(bundleID)
+                }
+            }
+        )
     }
 }
