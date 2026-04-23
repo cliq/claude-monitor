@@ -21,17 +21,6 @@ struct DashboardView: View {
                         TileView(session: session, now: now)
                             .flash(id: flashIds[session.id])
                             .onTapGesture { onClickSession(session) }
-                            .draggable(DraggedSessionID(id: session.id)) {
-                                TileView(session: session, now: now)
-                                    .opacity(0.7)
-                            }
-                            .dropDestination(for: DraggedSessionID.self) { items, _ in
-                                guard let source = items.first,
-                                      let targetIdx = store.orderedSessions.firstIndex(where: { $0.id == session.id })
-                                else { return false }
-                                store.move(sessionId: source.id, toIndex: targetIdx)
-                                return true
-                            }
                     }
                 }
                 .padding(0)
@@ -58,13 +47,5 @@ struct DashboardView: View {
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
         .padding(8)
-    }
-}
-
-/// Transferable wrapper used by drag-to-reorder.
-struct DraggedSessionID: Codable, Transferable {
-    let id: String
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .data)
     }
 }
