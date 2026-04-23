@@ -11,7 +11,7 @@ Each tile represents one Claude Code session and is one of four states:
 | Needs you | red | Claude is blocked on a permission prompt |
 | Finished | grey | Session ended; tile auto-removes shortly after |
 
-Clicking a tile brings its Terminal.app tab to the front.
+Clicking a tile brings its Terminal.app or iTerm2 tab to the front.
 
 ## Multiple Claude configurations
 
@@ -22,7 +22,9 @@ If you juggle multiple Claude configs, pair it with [claudewho](https://github.c
 ## Requirements
 
 - macOS 14 or later
-- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac) (support for iTerm, VS Code terminals, and others is planned)
+- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac)
+- [iTerm2](https://iterm2.com)
+- (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build from source (`brew install xcodegen`)
 
@@ -42,7 +44,7 @@ Build and run the `ClaudeMonitor` scheme. On first launch, the app asks which of
 1. The app writes a hook script to `~/.claude-monitor/hook.sh` and registers it for five Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`) in the selected `settings.json` files.
 2. When Claude Code fires a hook, the script POSTs an enriched event (session id, tty, pid, cwd) to a local HTTP server the app is running on `127.0.0.1`.
 3. The app maps each event through a state machine and updates the tile.
-4. Clicking a tile asks Terminal.app over AppleScript to focus the tab whose `tty` matches.
+4. Clicking a tile asks each enabled terminal provider (Terminal.app, iTerm2) over AppleScript to focus the tab/session whose `tty` matches; the first match wins.
 
 Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 
@@ -52,7 +54,7 @@ Only hook blocks tagged `"_managedBy": "claude-monitor"` are touched by the inst
 
 ```sh
 make test               # unit tests
-make test-integration   # integration tests (exercises real AppleScript + Terminal.app)
+make test-integration   # integration tests (exercises real AppleScript + Terminal.app and iTerm2)
 ```
 
 ## Uninstalling

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting Terminal.app tab. Only Terminal.app is supported — not iTerm, not VS Code terminals.
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting terminal tab. Terminal.app and iTerm2 are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
 The full design lives at `docs/superpowers/specs/2026-04-23-claude-monitor-design.md` and is the source of truth for product behavior; defer to it when behavior is ambiguous.
 
@@ -67,15 +67,30 @@ Hook entries are installed **into the user's Claude config directories**, not th
 
 `HookInstaller` always copies `<path>/settings.json` to `settings.json.bak` before writing (single rolling backup).
 
-### TerminalBridge
+### Terminal dispatch
 
-`TerminalBridge.focus(tty:expectedPid:)` is the only place the app talks to Terminal.app. Three guards, **all required**, because macOS recycles `/dev/ttysNNN` devices when tabs close:
+Click handling goes through `App/Core/Terminal/CompositeTerminalBridge.swift`,
+which fans `focus(tty:expectedPid:)` out across a list of `TerminalProvider`s
+in registry order (`TerminalRegistry.all`). The first provider whose
+AppleScript reports `.focused` wins.
 
-1. `NSWorkspace.runningApplications` check that Terminal is running.
-2. `kill(expectedPid, 0)` — ESRCH means the session is really gone.
-3. AppleScript match on `tty of t`.
+The composite owns two guards that used to live in `TerminalBridge`:
 
-Unit tests use `TerminalBridgeProtocol` with a fake; the real AppleScript path only runs under `make test-integration`.
+1. `NSWorkspace.runningApplications` — skip providers whose app isn't running.
+2. `kill(expectedPid, 0)` with ESRCH — short-circuit when the Claude process is
+   truly gone (macOS recycles `/dev/ttysNNN` when tabs close).
+
+Providers themselves (`AppleTerminalProvider`, `ITerm2Provider`) are thin
+AppleScript wrappers. The third guard — matching on `tty` inside the AppleScript
+— is per-provider because Terminal.app puts `tty` on tabs while iTerm2 puts it
+on sessions.
+
+User-disabled terminals come from `preferences.disabledTerminalBundleIDs`
+(Settings: "Terminal applications" section). Disabled-list semantics mean the
+default empty set opts every installed terminal in.
+
+Unit tests drive the composite with `FakeTerminalProvider`. Real AppleScript
+integration tests for each provider run only under `make test-integration`.
 
 ### SwiftUI layout
 

@@ -51,7 +51,7 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    /// Remove a session immediately (used by the TerminalBridge stale-tab path
+    /// Remove a session immediately (used by the terminal focus stale-tab path
     /// and the StaleSessionSweeper). No-op if unknown.
     func markFinished(sessionId: String) {
         orderedSessions.removeAll { $0.id == sessionId }
