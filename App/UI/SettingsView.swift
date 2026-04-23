@@ -32,6 +32,9 @@ struct SettingsView: View {
                         } else {
                             Button("Install") { install(entry.url) }
                         }
+                        if entry.status != .notInstalled {
+                            Button("Uninstall") { uninstall(entry) }
+                        }
                         Button("Remove", role: .destructive) { remove(entry) }
                     }
                     .padding(.vertical, 4)
@@ -41,6 +44,7 @@ struct SettingsView: View {
 
             HStack {
                 Button("Add Directory…") { addDirectory() }
+                Button("Redetect") { redetect() }
                 Spacer()
             }
 
@@ -88,25 +92,46 @@ struct SettingsView: View {
         alert.runModal()
     }
 
+    private func uninstall(_ entry: ManagedConfigDirectory) {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall hooks from \(entry.url.lastPathComponent)?"
+        alert.informativeText = "Claude Monitor's hook block will be removed from settings.json. The directory stays in the list and can be reinstalled later."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try HookInstaller.uninstall(configDir: entry.url)
+            refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func remove(_ entry: ManagedConfigDirectory) {
         let alert = NSAlert()
-        alert.messageText = "Remove \(entry.url.lastPathComponent)?"
-        alert.informativeText = "Also uninstall the hook block from its settings.json?"
-        alert.addButton(withTitle: "Uninstall & Remove")
-        alert.addButton(withTitle: "Remove from List Only")
+        alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
+        alert.informativeText = "This only removes the directory from Claude Monitor's list. Any installed hook in its settings.json is left in place — use Uninstall first if you want that gone too."
+        alert.addButton(withTitle: "Remove")
         alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        preferences.managedConfigDirectoryPaths.removeAll { $0 == entry.url.path }
+        refresh()
+    }
 
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            try? HookInstaller.uninstall(configDir: entry.url)
-            preferences.managedConfigDirectoryPaths.removeAll { $0 == entry.url.path }
-            refresh()
-        case .alertSecondButtonReturn:
-            preferences.managedConfigDirectoryPaths.removeAll { $0 == entry.url.path }
-            refresh()
-        default:
-            break
+    private func redetect() {
+        let discovered = ConfigDirectoryDiscovery.scan().map(\.path)
+        let currentSet = Set(preferences.managedConfigDirectoryPaths)
+        let added = discovered.filter { !currentSet.contains($0) }
+        guard !added.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "No new Claude directories found."
+            alert.informativeText = "Scanned your home folder for `.claude` and `.claudewho-*` directories containing a settings.json."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
         }
+        preferences.managedConfigDirectoryPaths.append(contentsOf: added)
+        refresh()
     }
 
     private func addDirectory() {
@@ -114,6 +139,7 @@ struct SettingsView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true   // Claude config dirs start with `.`
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if !preferences.managedConfigDirectoryPaths.contains(url.path) {
