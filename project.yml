@@ -32,6 +32,8 @@ targets:
       - path: Tests
       - path: scripts/hook.sh
         buildPhase: resources
+      - path: Tests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: ClaudeMonitor
     settings:

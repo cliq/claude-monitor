@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "_managedBy": "claude-monitor", "_version": 1, "command": "$HOME/.claude-monitor/hook.sh SessionStart" }
+    ],
+    "UserPromptSubmit": [
+      { "_managedBy": "claude-monitor", "_version": 1, "command": "$HOME/.claude-monitor/hook.sh UserPromptSubmit" }
+    ],
+    "Stop": [
+      { "_managedBy": "claude-monitor", "_version": 1, "command": "$HOME/.claude-monitor/hook.sh Stop" }
+    ],
+    "Notification": [
+      { "_managedBy": "claude-monitor", "_version": 1, "command": "$HOME/.claude-monitor/hook.sh Notification" }
+    ],
+    "SessionEnd": [
+      { "_managedBy": "claude-monitor", "_version": 1, "command": "$HOME/.claude-monitor/hook.sh SessionEnd" }
+    ]
+  }
+}

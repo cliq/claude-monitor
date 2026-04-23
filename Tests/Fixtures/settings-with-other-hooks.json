@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "command": "echo user-owned-hook" }
+    ],
+    "Stop": [
+      { "command": "custom-thing" }
+    ]
+  },
+  "other_key": "preserve me"
+}
