@@ -78,4 +78,38 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.orderedSessions[0].enteredStateAt, t1,
                        "enteredStateAt must only reset when the state actually changes")
     }
+
+    func test_finishedSessionIsRemovedAfter10Seconds() {
+        let clock = FakeClock()
+        let store = SessionStore(clock: clock, finishedRemovalDelay: 10)
+        store.apply(event(.sessionStart))
+        store.apply(event(.sessionEnd))
+
+        XCTAssertEqual(store.orderedSessions.count, 1)
+        XCTAssertEqual(store.orderedSessions[0].state, .finished)
+
+        clock.advance(by: 9)
+        store.tickRemovalTimer()
+        XCTAssertEqual(store.orderedSessions.count, 1, "still within 10s window")
+
+        clock.advance(by: 2)  // now 11s after finished
+        store.tickRemovalTimer()
+        XCTAssertEqual(store.orderedSessions.count, 0, "should be removed past 10s")
+    }
+
+    func test_finishedSessionCanBeRevivedBeforeRemoval() {
+        // Edge case: an event arrives for a finished session before the removal timer fires.
+        // Once finished is terminal per the state machine, we stay finished. But the timer
+        // still runs from the original finished moment — document this.
+        let clock = FakeClock()
+        let store = SessionStore(clock: clock, finishedRemovalDelay: 10)
+        store.apply(event(.sessionStart))
+        store.apply(event(.sessionEnd))
+        clock.advance(by: 3)
+        store.apply(event(.userPromptSubmit))  // should be ignored (finished is terminal)
+        XCTAssertEqual(store.orderedSessions[0].state, .finished)
+        clock.advance(by: 8)
+        store.tickRemovalTimer()
+        XCTAssertEqual(store.orderedSessions.count, 0)
+    }
 }

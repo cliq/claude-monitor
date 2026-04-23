@@ -1,3 +1,4 @@
+// App/Core/SessionStore.swift
 import Foundation
 import Combine
 
@@ -5,9 +6,11 @@ final class SessionStore: ObservableObject {
     @Published private(set) var orderedSessions: [Session] = []
 
     private let clock: Clock
+    private let finishedRemovalDelay: TimeInterval
 
-    init(clock: Clock = SystemClock()) {
+    init(clock: Clock = SystemClock(), finishedRemovalDelay: TimeInterval = 10) {
         self.clock = clock
+        self.finishedRemovalDelay = finishedRemovalDelay
     }
 
     func apply(_ event: HookEvent) {
@@ -22,7 +25,6 @@ final class SessionStore: ObservableObject {
                 session.state = newState
                 session.enteredStateAt = clock.now()
             }
-            // Always refresh identity fields; they may have been captured mid-lifecycle.
             session.tty = event.tty
             session.pid = event.pid
             session.cwd = event.cwd
@@ -43,5 +45,21 @@ final class SessionStore: ObservableObject {
             )
             orderedSessions.append(session)
         }
+    }
+
+    /// Called by the 1Hz tick timer (and by tests). Removes finished sessions
+    /// whose `enteredStateAt + finishedRemovalDelay` has passed.
+    func tickRemovalTimer() {
+        let cutoff = clock.now().addingTimeInterval(-finishedRemovalDelay)
+        orderedSessions.removeAll { $0.state == .finished && $0.enteredStateAt <= cutoff }
+    }
+
+    /// Mark a session finished immediately (used by the TerminalBridge stale-tab path
+    /// and the StaleSessionSweeper). No-op if already finished or unknown.
+    func markFinished(sessionId: String) {
+        guard let idx = orderedSessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        guard orderedSessions[idx].state != .finished else { return }
+        orderedSessions[idx].state = .finished
+        orderedSessions[idx].enteredStateAt = clock.now()
     }
 }
