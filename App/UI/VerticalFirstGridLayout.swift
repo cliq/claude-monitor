@@ -19,6 +19,9 @@ struct VerticalFirstGridLayout: Layout {
     // MARK: Pure helpers (unit-testable)
 
     func tilesPerColumn(containerHeight: CGFloat) -> Int {
+        // SwiftUI occasionally proposes `.infinity` during measurement passes (e.g. while a sheet animates).
+        // `Int(floor(.infinity))` traps, so clamp to something finite before converting.
+        guard containerHeight.isFinite, containerHeight > 0 else { return 1 }
         let usable = containerHeight - 2 * padding
         let slot = tileSize.height + gutter
         let fit = Int(floor((usable + gutter) / slot))  // +gutter because last tile has no trailing gutter
@@ -47,7 +50,8 @@ struct VerticalFirstGridLayout: Layout {
     // MARK: SwiftUI Layout conformance
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let containerHeight = proposal.height ?? 600
+        let proposed = proposal.height ?? 600
+        let containerHeight = proposed.isFinite ? proposed : 600
         return requiredSize(tileCount: subviews.count, containerHeight: containerHeight)
     }
 

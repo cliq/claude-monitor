@@ -29,6 +29,14 @@ final class VerticalFirstGridLayoutTests: XCTestCase {
         XCTAssertEqual(positions.map(\.x), [8, 176, 344])
     }
 
+    func test_infiniteContainerHeightDoesNotTrap() {
+        // SwiftUI proposes `.infinity` during some measurement passes (e.g. while a sheet animates).
+        // The layout must not trap in `Int(floor(...))`.
+        let layout = VerticalFirstGridLayout(tileSize: CGSize(width: 160, height: 80), gutter: 8, padding: 8)
+        let positions = layout.positions(tileCount: 3, containerHeight: .infinity)
+        XCTAssertEqual(positions.count, 3)
+    }
+
     func test_totalSizeReportsRequiredWidth() {
         let layout = VerticalFirstGridLayout(tileSize: CGSize(width: 160, height: 80), gutter: 8, padding: 8)
         let size = layout.requiredSize(tileCount: 5, containerHeight: 400)
