@@ -22,7 +22,7 @@ targets:
       path: App/Info.plist
       properties:
         LSUIElement: false
-        NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app tab of a selected Claude Code session."
+        NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app or iTerm2 tab of a selected Claude Code session."
     settings:
       base:
         PRODUCT_NAME: ClaudeMonitor
