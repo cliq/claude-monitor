@@ -10,8 +10,14 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(managedConfigDirectoryPaths, forKey: Self.configDirsKey) }
     }
 
-    @Published var manualTileOrder: [String] {
-        didSet { defaults.set(manualTileOrder, forKey: Self.tileOrderKey) }
+    /// Dashboard tile size preset.
+    @Published var tileSize: TileSize {
+        didSet { defaults.set(tileSize.rawValue, forKey: Self.tileSizeKey) }
+    }
+
+    /// Dashboard color palette preset.
+    @Published var paletteID: PaletteID {
+        didSet { defaults.set(paletteID.rawValue, forKey: Self.paletteKey) }
     }
 
     @Published var disabledTerminalBundleIDs: Set<String> {
@@ -24,15 +30,21 @@ final class Preferences: ObservableObject {
     }
 
     static let windowFrameAutosaveName = "ClaudeMonitorDashboardWindow"
-    private static let configDirsKey = "managedConfigDirectories"
-    private static let tileOrderKey = "manualTileOrder"
-    private static let onboardedKey = "onboarded"
+    private static let configDirsKey        = "managedConfigDirectories"
+    private static let onboardedKey         = "onboarded"
+    private static let tileSizeKey          = "tileSize"
+    private static let paletteKey           = "paletteID"
     private static let disabledTerminalsKey = "disabledTerminals"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.managedConfigDirectoryPaths = defaults.stringArray(forKey: Self.configDirsKey) ?? []
-        self.manualTileOrder = defaults.stringArray(forKey: Self.tileOrderKey) ?? []
         self.disabledTerminalBundleIDs = Set(defaults.stringArray(forKey: Self.disabledTerminalsKey) ?? [])
+
+        // Unknown raw values → default, so a future enum change can't prevent launch.
+        let rawSize    = defaults.string(forKey: Self.tileSizeKey) ?? ""
+        let rawPalette = defaults.string(forKey: Self.paletteKey)  ?? ""
+        self.tileSize  = TileSize(rawValue: rawSize)    ?? .medium
+        self.paletteID = PaletteID(rawValue: rawPalette) ?? .vibrant
     }
 }

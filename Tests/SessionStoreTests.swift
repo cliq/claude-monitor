@@ -101,35 +101,4 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.orderedSessions.count, 0)
     }
 
-    func test_moveSessionReordersList() {
-        let store = SessionStore(clock: FakeClock())
-        store.apply(event(.sessionStart, session: "a"))
-        store.apply(event(.sessionStart, session: "b"))
-        store.apply(event(.sessionStart, session: "c"))
-
-        store.move(sessionId: "c", toIndex: 0)
-        XCTAssertEqual(store.orderedSessions.map(\.id), ["c", "a", "b"])
-
-        store.move(sessionId: "a", toIndex: 2)
-        XCTAssertEqual(store.orderedSessions.map(\.id), ["c", "b", "a"])
-    }
-
-    func test_moveClampsOutOfRange() {
-        let store = SessionStore(clock: FakeClock())
-        store.apply(event(.sessionStart, session: "a"))
-        store.apply(event(.sessionStart, session: "b"))
-
-        store.move(sessionId: "a", toIndex: 99)
-        XCTAssertEqual(store.orderedSessions.map(\.id), ["b", "a"])
-
-        store.move(sessionId: "a", toIndex: -5)
-        XCTAssertEqual(store.orderedSessions.map(\.id), ["a", "b"])
-    }
-
-    func test_moveIgnoresUnknownId() {
-        let store = SessionStore(clock: FakeClock())
-        store.apply(event(.sessionStart, session: "a"))
-        store.move(sessionId: "ghost", toIndex: 0)
-        XCTAssertEqual(store.orderedSessions.map(\.id), ["a"])
-    }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var store: SessionStore
+    @ObservedObject var preferences: Preferences
     let onClickSession: (Session) -> Void
 
     @State private var flashIds: [String: UUID] = [:]
@@ -12,13 +13,20 @@ struct DashboardView: View {
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        Group {
+        let metrics = TileMetrics.resolve(preferences.tileSize)
+        let palette = Palette.resolve(preferences.paletteID)
+
+        return Group {
             if store.orderedSessions.isEmpty {
                 emptyState
             } else {
-                VerticalFirstGridLayout {
+                VerticalFirstGridLayout(
+                    tileSize: metrics.tileSize,
+                    gutter: metrics.gutter,
+                    padding: metrics.padding
+                ) {
                     ForEach(store.orderedSessions) { session in
-                        TileView(session: session, now: now)
+                        TileView(session: session, now: now, metrics: metrics, palette: palette)
                             .flash(id: flashIds[session.id])
                             .onTapGesture { onClickSession(session) }
                     }

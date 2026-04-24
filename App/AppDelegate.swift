@@ -45,10 +45,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sweeper.start()
 
         // 4. Dashboard window.
-        let content = DashboardView(store: store, onClickSession: { [weak self] session in
+        let content = DashboardView(store: store,
+                                    preferences: preferences,
+                                    onClickSession: { [weak self] session in
             self?.handleClick(on: session)
         })
-        dashboard = DashboardWindow(rootView: content, store: store)
+        dashboard = DashboardWindow(rootView: content, store: store, preferences: preferences)
 
         // 5. Menu bar.
         menuBar = MenuBarController(

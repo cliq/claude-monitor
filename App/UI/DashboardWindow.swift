@@ -7,14 +7,10 @@ final class DashboardWindow {
     private let window: BorderlessFloatingWindow
     private var subscription: AnyCancellable?
 
-    // Must match VerticalFirstGridLayout defaults so the window frames the tiles exactly.
-    private let tileSize = CGSize(width: 160, height: 80)
-    private let gutter: CGFloat = 8
-    private let padding: CGFloat = 8
     private let emptyStateSize = NSSize(width: 260, height: 120)
     private let maxHeightFraction: CGFloat = 0.8
 
-    init<Content: View>(rootView: Content, store: SessionStore) {
+    init<Content: View>(rootView: Content, store: SessionStore, preferences: Preferences) {
         let hosting = NSHostingController(rootView: rootView)
         let window = BorderlessFloatingWindow(contentViewController: hosting)
         // Borderless only — no `.resizable`, because on a borderless window edge-area
@@ -31,11 +27,18 @@ final class DashboardWindow {
         window.setFrameAutosaveName(Preferences.windowFrameAutosaveName)
         self.window = window
 
-        resize(toFit: store.orderedSessions.count)
-        subscription = store.$orderedSessions
-            .map(\.count)
-            .removeDuplicates()
-            .sink { [weak self] count in self?.resize(toFit: count) }
+        // Initial size.
+        resize(count: store.orderedSessions.count,
+               metrics: TileMetrics.resolve(preferences.tileSize))
+
+        // React to either the session count or the tile-size preference changing.
+        subscription = Publishers.CombineLatest(
+            store.$orderedSessions.map(\.count).removeDuplicates(),
+            preferences.$tileSize.removeDuplicates()
+        )
+        .sink { [weak self] count, size in
+            self?.resize(count: count, metrics: TileMetrics.resolve(size))
+        }
     }
 
     func showAndBringToFront() {
@@ -51,8 +54,8 @@ final class DashboardWindow {
 
     var isVisible: Bool { window.isVisible }
 
-    private func resize(toFit sessionCount: Int) {
-        let newSize = desiredContentSize(forSessionCount: sessionCount)
+    private func resize(count: Int, metrics: TileMetrics) {
+        let newSize = desiredContentSize(count: count, metrics: metrics)
         // Anchor the top-left so the window grows down/right instead of jumping.
         let oldFrame = window.frame
         let topY = oldFrame.origin.y + oldFrame.size.height
@@ -61,24 +64,28 @@ final class DashboardWindow {
                         display: window.isVisible, animate: false)
     }
 
-    private func desiredContentSize(forSessionCount count: Int) -> NSSize {
+    private func desiredContentSize(count: Int, metrics: TileMetrics) -> NSSize {
         guard count > 0 else { return emptyStateSize }
         let screenFrame = window.screen?.visibleFrame
             ?? NSScreen.main?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let maxHeight = screenFrame.height * maxHeightFraction
-        let slot = tileSize.height + gutter
-        let maxRows = max(1, Int(floor((maxHeight - 2 * padding + gutter) / slot)))
+        let slot = metrics.tileSize.height + metrics.gutter
+        let usable = maxHeight - 2 * metrics.padding + metrics.gutter
+        let maxRows = max(1, Int(floor(usable / slot)))
         let rows = min(count, maxRows)
         let cols = Int(ceil(Double(count) / Double(rows)))
-        let width = 2 * padding + CGFloat(cols) * tileSize.width + CGFloat(max(0, cols - 1)) * gutter
-        let height = 2 * padding + CGFloat(rows) * tileSize.height + CGFloat(max(0, rows - 1)) * gutter
+        let interTileWidth  = CGFloat(max(0, cols - 1)) * metrics.gutter
+        let interTileHeight = CGFloat(max(0, rows - 1)) * metrics.gutter
+        let width  = 2 * metrics.padding + CGFloat(cols) * metrics.tileSize.width  + interTileWidth
+        let height = 2 * metrics.padding + CGFloat(rows) * metrics.tileSize.height + interTileHeight
         return NSSize(width: width, height: height)
     }
 }
 
-/// Borderless windows default to non-key/non-main, which suppresses drag-and-drop
-/// and keyboard focus. We need both (tile reordering via drag).
+/// Borderless windows default to non-key/non-main, which suppresses click-to-focus
+/// and keyboard events. We opt back in so tile taps and the menu-bar / settings
+/// open paths work correctly.
 final class BorderlessFloatingWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
