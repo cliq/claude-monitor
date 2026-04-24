@@ -15,6 +15,12 @@ final class DashboardWindow {
 
     init<Content: View>(rootView: Content, store: SessionStore, preferences: Preferences) {
         let hosting = NSHostingController(rootView: rootView)
+        // Prevent `NSHostingController` from resizing the window to match intrinsic
+        // SwiftUI content size. Its auto-resize anchors the top-LEFT, which caused
+        // the window to drift rightward every time a new card was added — even with
+        // `resize()` re-anchoring the top-right moments later. All window sizing is
+        // now driven exclusively by `DashboardWindow.resize(count:metrics:)`.
+        hosting.sizingOptions = []
         let window = BorderlessFloatingWindow(contentViewController: hosting)
         // Borderless only — no `.resizable`, because on a borderless window edge-area
         // mouseDowns would start a resize drag that shrinks height and collapses the grid
