@@ -8,6 +8,7 @@ struct AppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             sizeSection
             paletteSection
+            Spacer(minLength: 0)
         }
         .padding(20)
     }
@@ -95,6 +96,7 @@ private struct PaletteSwatch: View {
                     .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.35),
                             lineWidth: isSelected ? 2 : 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(palette.displayName) palette")
