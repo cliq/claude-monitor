@@ -11,3 +11,9 @@ default.profraw
 
 # Isolated git worktrees for branch work
 .worktrees/
+
+# Local signing overrides — each contributor keeps their own
+Configuration/LocalSigning.xcconfig
+
+# Exported signing cert / API key files — never commit
+keys/

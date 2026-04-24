@@ -102,5 +102,5 @@ The dashboard uses a single 1 Hz `Timer.publish` in `DashboardView` to drive all
 
 - `scripts/hook.sh` is a **build resource** (see `project.yml`) for both the app and the test bundle — `HookScriptDeployer` finds it via `Bundle.main` first, then falls back to the test bundle. Don't inline its contents into Swift; edit the file.
 - Set `CLAUDE_MONITOR_SKIP_ONBOARDING=1` in a scheme's environment (or `launchEnvironment`) to skip the first-run sheet in UI tests.
-- `project.yml` disables hardened runtime (`ENABLE_HARDENED_RUNTIME: NO`) deliberately — the app needs to send Apple events to Terminal. Don't flip it on without plumbing entitlements.
+- Hardened runtime is **off** by default (fast local iteration; no TCC prompt on every fresh build). The release workflow (`.github/workflows/release.yml`) overrides `ENABLE_HARDENED_RUNTIME=YES` for notarization. Apple-event access to Terminal.app is plumbed through `App/ClaudeMonitor.entitlements` (`com.apple.security.automation.apple-events`) so the hardened-runtime build still works; new entitlements must be added there. Signing identity is configured via `Configuration/LocalSigning.xcconfig` (gitignored) — see `docs/notarization.md`.
 - Fixture JSON for `HookInstallerTests` lives at `Tests/Fixtures/` and is bundled into the test target.

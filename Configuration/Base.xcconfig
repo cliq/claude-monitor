@@ -1,0 +1,8 @@
+// Default open-source configuration
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+
+APP_BUNDLE_ID = com.cliqconsulting.claudemonitor
+
+#include? "LocalSigning.xcconfig"

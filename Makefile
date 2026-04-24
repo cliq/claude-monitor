@@ -28,7 +28,7 @@ open: gen
 
 # Build Release with ad-hoc signing so it runs on this Mac without a Developer ID.
 # Use this for local installs; notarized builds are produced by the release workflow
-# (see docs/notarization.md in the signing stash).
+# (see docs/notarization.md).
 release: gen
 	set -o pipefail && xcodebuild \
 	  -project ClaudeMonitor.xcodeproj \

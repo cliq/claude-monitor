@@ -1,0 +1,9 @@
+// Copy to LocalSigning.xcconfig (gitignored) and fill in your values.
+//
+// DEVELOPMENT_TEAM: Your Apple Developer Team ID (Xcode → Settings → Accounts).
+// APP_BUNDLE_ID:    A unique bundle identifier you control. Only override if you
+//                   can't use the default com.cliqconsulting.claudemonitor (e.g.
+//                   signing under a personal team).
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+APP_BUNDLE_ID = com.yourcompany.claudemonitor

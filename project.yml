@@ -8,12 +8,16 @@ settings:
   base:
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    CODE_SIGN_STYLE: Automatic
+    # Default off for fast local iteration (no TCC prompts when driving Terminal).
+    # The release workflow overrides this to YES for notarization.
     ENABLE_HARDENED_RUNTIME: NO
 targets:
   ClaudeMonitor:
     type: application
     platform: macOS
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
     sources:
       - path: App
       - path: scripts/hook.sh
@@ -34,11 +38,15 @@ targets:
     settings:
       base:
         PRODUCT_NAME: ClaudeMonitor
-        PRODUCT_BUNDLE_IDENTIFIER: com.cliqconsulting.claudemonitor
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: App/ClaudeMonitor.entitlements
   ClaudeMonitorTests:
     type: bundle.unit-test
     platform: macOS
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
     sources:
       - path: Tests
       - path: scripts/hook.sh
@@ -50,9 +58,13 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
   ClaudeMonitorIntegrationTests:
     type: bundle.unit-test
     platform: macOS
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
     sources:
       - path: IntegrationTests
     dependencies:
@@ -60,9 +72,13 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).integration-tests
   ClaudeMonitorUITests:
     type: bundle.ui-testing
     platform: macOS
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
     sources:
       - path: UITests
     dependencies:
@@ -70,3 +86,4 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).ui-tests
