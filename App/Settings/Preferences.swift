@@ -24,17 +24,30 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(disabledTerminalBundleIDs.sorted(), forKey: Self.disabledTerminalsKey) }
     }
 
+    /// Last known dashboard window frame (screen coordinates). We manage this manually
+    /// instead of relying on `setFrameAutosaveName`, because borderless+floating windows
+    /// don't persist reliably through AppKit's built-in autosave.
+    @Published var dashboardWindowFrame: NSRect? {
+        didSet {
+            if let frame = dashboardWindowFrame {
+                defaults.set(NSStringFromRect(frame), forKey: Self.dashboardFrameKey)
+            } else {
+                defaults.removeObject(forKey: Self.dashboardFrameKey)
+            }
+        }
+    }
+
     var hasOnboarded: Bool {
         get { defaults.bool(forKey: Self.onboardedKey) }
         set { defaults.set(newValue, forKey: Self.onboardedKey) }
     }
 
-    static let windowFrameAutosaveName = "ClaudeMonitorDashboardWindow"
     private static let configDirsKey        = "managedConfigDirectories"
     private static let onboardedKey         = "onboarded"
     private static let tileSizeKey          = "tileSize"
     private static let paletteKey           = "paletteID"
     private static let disabledTerminalsKey = "disabledTerminals"
+    private static let dashboardFrameKey    = "dashboardWindowFrame"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -46,5 +59,10 @@ final class Preferences: ObservableObject {
         let rawPalette = defaults.string(forKey: Self.paletteKey)  ?? ""
         self.tileSize  = TileSize(rawValue: rawSize)    ?? .medium
         self.paletteID = PaletteID(rawValue: rawPalette) ?? .vibrant
+
+        if let encoded = defaults.string(forKey: Self.dashboardFrameKey) {
+            let rect = NSRectFromString(encoded)
+            self.dashboardWindowFrame = rect.isEmpty ? nil : rect
+        }
     }
 }

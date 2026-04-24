@@ -5,10 +5,13 @@ import SwiftUI
 
 final class DashboardWindow {
     private let window: BorderlessFloatingWindow
+    private let preferences: Preferences
     private var subscription: AnyCancellable?
+    private var frameObservers: [NSObjectProtocol] = []
 
     private let emptyStateSize = NSSize(width: 260, height: 120)
     private let maxHeightFraction: CGFloat = 0.8
+    private let screenEdgeMargin: CGFloat = 20
 
     init<Content: View>(rootView: Content, store: SessionStore, preferences: Preferences) {
         let hosting = NSHostingController(rootView: rootView)
@@ -24,12 +27,19 @@ final class DashboardWindow {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName(Preferences.windowFrameAutosaveName)
         self.window = window
+        self.preferences = preferences
 
-        // Initial size.
-        resize(count: store.orderedSessions.count,
-               metrics: TileMetrics.resolve(preferences.tileSize))
+        // Initial frame: restore the saved top-right corner if it still lives on a
+        // connected screen, otherwise default to the top-right of the main screen.
+        let initialSize = desiredContentSize(
+            count: store.orderedSessions.count,
+            metrics: TileMetrics.resolve(preferences.tileSize)
+        )
+        let origin = initialOrigin(for: initialSize, saved: preferences.dashboardWindowFrame)
+        window.setFrame(NSRect(origin: origin, size: initialSize), display: false, animate: false)
+
+        observeFrameChanges()
 
         // React to either the session count or the tile-size preference changing.
         subscription = Publishers.CombineLatest(
@@ -39,6 +49,10 @@ final class DashboardWindow {
         .sink { [weak self] count, size in
             self?.resize(count: count, metrics: TileMetrics.resolve(size))
         }
+    }
+
+    deinit {
+        frameObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func showAndBringToFront() {
@@ -56,12 +70,51 @@ final class DashboardWindow {
 
     private func resize(count: Int, metrics: TileMetrics) {
         let newSize = desiredContentSize(count: count, metrics: metrics)
-        // Anchor the top-left so the window grows down/right instead of jumping.
+        // Anchor the top-RIGHT corner so new cards grow down-and-to-the-left instead
+        // of pushing the right edge outward. This matches the default top-right
+        // positioning and keeps the window feeling stable when docked to that corner.
         let oldFrame = window.frame
+        let rightX = oldFrame.origin.x + oldFrame.size.width
         let topY = oldFrame.origin.y + oldFrame.size.height
-        let newOrigin = NSPoint(x: oldFrame.origin.x, y: topY - newSize.height)
+        let newOrigin = NSPoint(x: rightX - newSize.width, y: topY - newSize.height)
         window.setFrame(NSRect(origin: newOrigin, size: newSize),
                         display: window.isVisible, animate: false)
+    }
+
+    /// Restore the saved top-right corner if the saved frame's center still lives on a
+    /// connected screen. Otherwise default to the top-right of the main screen's
+    /// visible frame with a small margin.
+    private func initialOrigin(for size: NSSize, saved: NSRect?) -> NSPoint {
+        if let saved {
+            let center = NSPoint(x: saved.midX, y: saved.midY)
+            let onScreen = NSScreen.screens.contains { $0.frame.contains(center) }
+            if onScreen {
+                let rightX = saved.origin.x + saved.size.width
+                let topY = saved.origin.y + saved.size.height
+                return NSPoint(x: rightX - size.width, y: topY - size.height)
+            }
+        }
+        let screen = NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        return NSPoint(x: screen.maxX - size.width - screenEdgeMargin,
+                       y: screen.maxY - size.height - screenEdgeMargin)
+    }
+
+    /// Persist the current frame on user drag or any programmatic setFrame. The app is
+    /// a singleton for the lifetime of the process, so these observers outlive deinit
+    /// — but we clean them up anyway for hygiene and for tests that new up instances.
+    private func observeFrameChanges() {
+        let center = NotificationCenter.default
+        let record: (Notification) -> Void = { [weak self] _ in
+            guard let self else { return }
+            self.preferences.dashboardWindowFrame = self.window.frame
+        }
+        frameObservers = [
+            center.addObserver(forName: NSWindow.didMoveNotification,
+                               object: window, queue: .main, using: record),
+            center.addObserver(forName: NSWindow.didResizeNotification,
+                               object: window, queue: .main, using: record),
+        ]
     }
 
     private func desiredContentSize(count: Int, metrics: TileMetrics) -> NSSize {
