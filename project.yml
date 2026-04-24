@@ -23,10 +23,18 @@ targets:
       properties:
         LSUIElement: false
         NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app or iTerm2 tab of a selected Claude Code session."
+        # actool emits `AppIcon.icns` into Contents/Resources but its generated partial
+        # Info.plist isn't merged when `INFOPLIST_FILE` is a static path, so declare
+        # the icon reference explicitly here. `CFBundleIconFile` is the legacy macOS
+        # key (`.icns` filename without extension); `CFBundleIconName` is the modern
+        # asset-catalog-aware key. Both point at the same name; Finder/Dock use them.
+        CFBundleIconFile: AppIcon
+        CFBundleIconName: AppIcon
     settings:
       base:
         PRODUCT_NAME: ClaudeMonitor
         PRODUCT_BUNDLE_IDENTIFIER: com.cliqconsulting.claudemonitor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   ClaudeMonitorTests:
     type: bundle.unit-test
     platform: macOS
