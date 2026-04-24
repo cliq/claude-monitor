@@ -14,13 +14,21 @@ final class DashboardWindow {
     private let screenEdgeMargin: CGFloat = 20
 
     init<Content: View>(rootView: Content, store: SessionStore, preferences: Preferences) {
-        let hosting = NSHostingController(rootView: rootView)
-        // Prevent `NSHostingController` from resizing the window to match intrinsic
+        // `FirstMouseHostingView` opts into first-mouse handling so a click on a tile
+        // activates the target terminal in a single click — even when the dashboard
+        // isn't the frontmost app. Dragging the empty background still moves the
+        // window (background isn't a tap target) and dragging on a tile does nothing
+        // (tile content is opaque-hit-testable, so `isMovableByWindowBackground`
+        // doesn't fire there).
+        let hostingView = FirstMouseHostingView(rootView: rootView)
+        // Prevent the hosting view from resizing the window to match intrinsic
         // SwiftUI content size. Its auto-resize anchors the top-LEFT, which caused
         // the window to drift rightward every time a new card was added — even with
         // `resize()` re-anchoring the top-right moments later. All window sizing is
         // now driven exclusively by `DashboardWindow.resize(count:metrics:)`.
-        hosting.sizingOptions = []
+        hostingView.sizingOptions = []
+        let hosting = NSViewController()
+        hosting.view = hostingView
         let window = BorderlessFloatingWindow(contentViewController: hosting)
         // Borderless only — no `.resizable`, because on a borderless window edge-area
         // mouseDowns would start a resize drag that shrinks height and collapses the grid
@@ -140,6 +148,13 @@ final class DashboardWindow {
         let height = 2 * metrics.padding + CGFloat(rows) * metrics.tileSize.height + interTileHeight
         return NSSize(width: width, height: height)
     }
+}
+
+/// Accept first-mouse so a click on a tile fires its tap gesture even when the
+/// app is inactive — otherwise the first click is consumed by window activation
+/// and the user has to click twice.
+final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Borderless windows default to non-key/non-main, which suppresses click-to-focus
