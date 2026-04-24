@@ -174,7 +174,7 @@ The installer only touches entries it owns. User-authored hooks are never modifi
 > design (Terminal.app only). Terminal dispatch has since been split into a `TerminalProvider`
 > protocol with per-terminal implementations (`AppleTerminalProvider`, `ITerm2Provider`) and a
 > `CompositeTerminalBridge` that fans out across all enabled providers. iTerm2 is now supported.
-> See `docs/superpowers/specs/2026-04-24-iterm-support-design.md` for the current design.
+> See the "Terminal dispatch" section of `CLAUDE.md` for the current architecture.
 
 ### 5.1 Identifying the tab
 
