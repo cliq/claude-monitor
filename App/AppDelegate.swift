@@ -106,4 +106,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
     }
+
+    /// Show a customized standard About panel. The default panel already pulls the
+    /// app icon, version, build, and `NSHumanReadableCopyright` from the bundle;
+    /// we only add a clickable cliq.dev link to the credits area above the copyright.
+    static func showAboutPanel() {
+        let link = URL(string: "https://www.cliq.dev/")!
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let credits = NSAttributedString(
+            string: "cliq.dev",
+            attributes: [
+                .link: link,
+                .foregroundColor: NSColor.linkColor,
+                .font: NSFont.systemFont(ofSize: 11),
+                .paragraphStyle: paragraph,
+            ]
+        )
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
 }

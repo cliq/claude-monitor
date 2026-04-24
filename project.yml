@@ -23,6 +23,7 @@ targets:
       properties:
         LSUIElement: false
         NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app or iTerm2 tab of a selected Claude Code session."
+        NSHumanReadableCopyright: "Copyright © 2026 Cliq Consulting LLC. All rights reserved."
         # actool emits `AppIcon.icns` into Contents/Resources but its generated partial
         # Info.plist isn't merged when `INFOPLIST_FILE` is a static path, so declare
         # the icon reference explicitly here. `CFBundleIconFile` is the legacy macOS
