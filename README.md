@@ -39,17 +39,26 @@ If you juggle multiple Claude configs, pair it with [claudewho](https://github.c
 - macOS 14 or later
 - [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac) or [iTerm2](https://iterm2.com) (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build from source (`brew install xcodegen`)
 
 ## Install
 
-Build a Release and drop it into `/Applications`:
+### Option A — download the signed DMG
+
+Grab `ClaudeMonitor.dmg` from the [latest release](https://github.com/cliq/claude-monitor/releases/latest), open it, and drag `ClaudeMonitor.app` to `/Applications`. The build is signed with a Developer ID and notarized by Apple, so Gatekeeper won't warn you.
+
+### Option B — build from source
+
+Requires [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```sh
 make install
 ```
 
-This quits any running copy, replaces `/Applications/ClaudeMonitor.app`, and relaunches it. On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed.
+This builds a Release with ad-hoc signing, quits any running copy, replaces `/Applications/ClaudeMonitor.app`, and relaunches it.
+
+### First launch
+
+On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed.
 
 ## Uninstalling
 
