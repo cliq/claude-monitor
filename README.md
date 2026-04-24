@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/app-icon.png" alt="Claude Monitor app icon" width="160" />
+</p>
+
 # Claude Monitor
 
 A native macOS menu-bar app that shows the live state of every Claude Code CLI session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
@@ -13,32 +17,6 @@ Each tile represents one Claude Code session and is one of four states:
 
 Clicking a tile brings its Terminal.app or iTerm2 tab to the front.
 
-## Multiple Claude configurations
-
-Claude Monitor is built around the idea that you may run several Claude Code configurations side by side — for example one per client or per workspace. It auto-discovers `~/.claude` and any `~/.claudewho-*` directory that contains a `settings.json`, and lets you install or uninstall hooks into each one independently from Settings. Sessions from every managed directory land in the same dashboard.
-
-If you juggle multiple Claude configs, pair it with [claudewho](https://github.com/frisble/claudewho) — the `~/.claudewho-*` layout Claude Monitor discovers is the one `claudewho` creates.
-
-## Requirements
-
-- macOS 14 or later
-- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac)
-- [iTerm2](https://iterm2.com)
-- (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
-- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build from source (`brew install xcodegen`)
-
-## Build & run
-
-The Xcode project is generated from `project.yml`.
-
-```sh
-make gen    # generate ClaudeMonitor.xcodeproj
-make open   # generate and open in Xcode
-```
-
-Build and run the `ClaudeMonitor` scheme. On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed.
-
 ## How it works
 
 1. The app writes a hook script to `~/.claude-monitor/hook.sh` and registers it for five Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`) in the selected `settings.json` files.
@@ -48,20 +26,37 @@ Build and run the `ClaudeMonitor` scheme. On first launch, the app asks which of
 
 Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 
-Only hook blocks tagged `"_managedBy": "claude-monitor"` are touched by the installer; your own hooks are left alone, and a rolling `settings.json.bak` is kept before every write.
+Only hook entries tagged with `--managed-by=claude-monitor` in the command are touched by the installer; your own hooks are left alone, and a rolling `settings.json.bak` is kept before every write.
 
-## Tests
+## Multiple Claude configurations
+
+Claude Monitor is built around the idea that you may run several Claude Code configurations side by side — for example one per client or per workspace. It auto-discovers `~/.claude` and any `~/.claudewho-*` directory that contains a `settings.json`, and lets you install or uninstall hooks into each one independently from Settings. Sessions from every managed directory land in the same dashboard.
+
+If you juggle multiple Claude configs, pair it with [claudewho](https://github.com/frisble/claudewho) — the `~/.claudewho-*` layout Claude Monitor discovers is the one `claudewho` creates.
+
+## Requirements
+
+- macOS 14 or later
+- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac) or [iTerm2](https://iterm2.com) (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
+- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build from source (`brew install xcodegen`)
+
+## Install
+
+Build a Release and drop it into `/Applications`:
 
 ```sh
-make test               # unit tests
-make test-integration   # integration tests (exercises real AppleScript + Terminal.app and iTerm2)
+make install
 ```
+
+This quits any running copy, replaces `/Applications/ClaudeMonitor.app`, and relaunches it. On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed.
 
 ## Uninstalling
 
 1. In the app, go to Settings and click **Uninstall** next to each managed directory. This removes the hook block from its `settings.json`.
 2. Quit the app.
 3. Remove `~/.claude-monitor/` to clean up the runtime files.
+4. Remove `/Applications/ClaudeMonitor.app`.
 
 ## License
 
