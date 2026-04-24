@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "_managedBy": "claude-monitor",
+        "_version": 3,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/hook.sh SessionStart --managed-by=claude-monitor --version=3" }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "_managedBy": "claude-monitor",
+        "_version": 3,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/hook.sh UserPromptSubmit --managed-by=claude-monitor --version=3" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "_managedBy": "claude-monitor",
+        "_version": 3,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/hook.sh Stop --managed-by=claude-monitor --version=3" }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "_managedBy": "claude-monitor",
+        "_version": 3,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/hook.sh Notification --managed-by=claude-monitor --version=3" }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "_managedBy": "claude-monitor",
+        "_version": 3,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/hook.sh SessionEnd --managed-by=claude-monitor --version=3" }
+        ]
+      }
+    ]
+  }
+}

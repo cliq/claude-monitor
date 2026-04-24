@@ -63,7 +63,7 @@ Hook entries are installed **into the user's Claude config directories**, not th
 
 ### Hook schema versioning
 
-`HookInstaller.currentVersion` gates the schema of the managed block in `settings.json`. Bumping it flips previously-installed directories to `.outdated`, surfacing a one-click reinstall in Settings. **When changing what the installer writes, bump this number** and make sure the comparison in `inspect(configDir:)` still only compares commands at the current version — v1 used a flat `{command}` shape, v2 uses Claude Code's real `{matcher, hooks: [{type, command}]}` schema. See commit `989c15e`.
+`HookInstaller.currentVersion` gates the schema of the managed block in `settings.json`. Bumping it flips previously-installed directories to `.outdated`, surfacing a one-click reinstall in Settings. **When changing what the installer writes, bump this number** and make sure the comparison in `inspect(configDir:)` still only compares commands at the current version. Schema history: v1 used a flat `{command}` shape, v2 moved to Claude Code's real `{matcher, hooks: [{type, command}]}` schema (commit `989c15e`), v3 moved the managed tag *into* the command string as `--managed-by=claude-monitor --version=3`. The arg-encoded tag is the load-bearing signal — some tools re-serialize `settings.json` and drop unknown sidecar keys like `_managedBy`/`_version`, which used to leave real installs looking "Not installed". `inspect` and `uninstall` identify our entries by the `.claude-monitor/hook.sh` path in the command as a fallback.
 
 `HookInstaller` always copies `<path>/settings.json` to `settings.json.bak` before writing (single rolling backup).
 

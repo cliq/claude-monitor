@@ -36,18 +36,39 @@ final class HookInstallerTests: XCTestCase {
     }
 
     func test_inspectReportsInstalledForCurrentVersionFixture() throws {
-        _ = try writeSettings("settings-with-managed-v2")
+        _ = try writeSettings("settings-with-managed-v3")
         let status = try HookInstaller.inspect(configDir: dir)
         XCTAssertEqual(status.status, .installed)
         XCTAssertEqual(status.installedVersion, HookInstaller.currentVersion)
     }
 
-    func test_inspectReportsOutdatedForPreviousVersionFixture() throws {
+    func test_inspectReportsOutdatedForV1Fixture() throws {
         _ = try writeSettings("settings-with-managed-v1")
         let status = try HookInstaller.inspect(configDir: dir)
         XCTAssertEqual(status.status, .outdated,
                        "v1 used a schema Claude Code rejects; users should be prompted to reinstall")
         XCTAssertEqual(status.installedVersion, 1)
+    }
+
+    func test_inspectReportsOutdatedForV2Fixture() throws {
+        _ = try writeSettings("settings-with-managed-v2")
+        let status = try HookInstaller.inspect(configDir: dir)
+        XCTAssertEqual(status.status, .outdated,
+                       "v2 predates the arg-encoded managed tag; reinstall surfaces the upgrade")
+        XCTAssertEqual(status.installedVersion, 2)
+    }
+
+    func test_inspectReportsOutdatedWhenSidecarKeysWereStripped() throws {
+        // Real-world bug: Claude Code's settings loader re-serialized settings.json and
+        // dropped the unknown `_managedBy`/`_version` keys, leaving the `hooks` blocks
+        // with only `matcher` + nested `hooks[]`. Detection must still recognize these
+        // entries as ours by the `.claude-monitor/hook.sh` path in the command, and flag
+        // them as outdated so one-click Reinstall rewrites them with the arg-encoded tag.
+        _ = try writeSettings("settings-with-stripped-metadata")
+        let status = try HookInstaller.inspect(configDir: dir)
+        XCTAssertEqual(status.status, .outdated)
+        XCTAssertEqual(status.installedVersion, 0,
+                       "no `--version=N` arg and no sidecar means we don't know the prior version")
     }
 
     func test_installAddsAllFiveHooksWithClaudeCodeHookSchema() throws {
@@ -70,7 +91,9 @@ final class HookInstallerTests: XCTestCase {
             let inner = try XCTUnwrap(entry["hooks"] as? [[String: Any]])
             XCTAssertEqual(inner.count, 1)
             XCTAssertEqual(inner[0]["type"] as? String, "command")
-            XCTAssertEqual(inner[0]["command"] as? String, "$HOME/.claude-monitor/hook.sh \(name)")
+            XCTAssertEqual(inner[0]["command"] as? String,
+                           "$HOME/.claude-monitor/hook.sh \(name) --managed-by=claude-monitor --version=\(HookInstaller.currentVersion)",
+                           "command must carry the arg-encoded managed tag so detection survives even when sidecar keys get stripped")
         }
     }
 
@@ -131,6 +154,15 @@ final class HookInstallerTests: XCTestCase {
         try HookInstaller.uninstall(configDir: dir)
         let after = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("settings.json"))) as! [String: Any]
         XCTAssertNil(after["hooks"], "every hook entry was managed — `hooks` object should be removed")
+    }
+
+    func test_uninstallCleansUpEntriesThatLostTheirSidecarKeys() throws {
+        // Same recovery story for the stripped-metadata case: we still own these entries
+        // (the command points at .claude-monitor/hook.sh) so uninstall must remove them.
+        _ = try writeSettings("settings-with-stripped-metadata")
+        try HookInstaller.uninstall(configDir: dir)
+        let after = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("settings.json"))) as! [String: Any]
+        XCTAssertNil(after["hooks"], "stripped entries should still be recognized and removed")
     }
 
     func test_installWritesBackupOfPreviousSettings() throws {
