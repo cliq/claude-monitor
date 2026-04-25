@@ -8,6 +8,7 @@ final class DashboardWindow {
     private let preferences: Preferences
     private var subscription: AnyCancellable?
     private var frameObservers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
 
     private let emptyStateSize = NSSize(width: 260, height: 120)
     private let maxHeightFraction: CGFloat = 0.8
@@ -54,6 +55,8 @@ final class DashboardWindow {
         window.setFrame(NSRect(origin: origin, size: initialSize), display: false, animate: false)
 
         observeFrameChanges()
+        observeScreenParameterChanges()
+        observeWakeNotifications()
 
         // React to either the session count or the tile-size preference changing.
         subscription = Publishers.CombineLatest(
@@ -67,6 +70,7 @@ final class DashboardWindow {
 
     deinit {
         frameObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
     func showAndBringToFront() {
@@ -114,13 +118,18 @@ final class DashboardWindow {
                        y: screen.maxY - size.height - screenEdgeMargin)
     }
 
-    /// Persist the current frame on user drag or any programmatic setFrame. The app is
-    /// a singleton for the lifetime of the process, so these observers outlive deinit
-    /// — but we clean them up anyway for hygiene and for tests that new up instances.
+    /// Persist the frame only on genuine user drags. AppKit also fires `didMove`/
+    /// `didResize` when displays connect/disconnect (it evacuates the window onto
+    /// the surviving screen) and when we call `setFrame` programmatically. Persisting
+    /// those would overwrite the user's intended position with main-screen
+    /// coordinates and leave nothing to restore on wake. User drags fire while the
+    /// mouse button is held; system/programmatic moves fire with no button pressed,
+    /// so the pressed-buttons mask cleanly separates them.
     private func observeFrameChanges() {
         let center = NotificationCenter.default
         let record: (Notification) -> Void = { [weak self] _ in
             guard let self else { return }
+            guard NSEvent.pressedMouseButtons != 0 else { return }
             self.preferences.dashboardWindowFrame = self.window.frame
         }
         frameObservers = [
@@ -129,6 +138,66 @@ final class DashboardWindow {
             center.addObserver(forName: NSWindow.didResizeNotification,
                                object: window, queue: .main, using: record),
         ]
+    }
+
+    /// On display attach/detach, AppKit evacuates the window onto whichever screen
+    /// survived. Snap back to the saved spot once the original screen returns (e.g.
+    /// the secondary monitor reconnects after wake). The pressed-buttons filter in
+    /// `observeFrameChanges` keeps the synthetic evacuation from corrupting the
+    /// saved frame, so we always have a real position to restore to.
+    private func observeScreenParameterChanges() {
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.restoreSavedFrameIfPossible()
+        }
+        frameObservers.append(observer)
+    }
+
+    /// On wake, AppKit may have already shoved the dashboard onto the main display
+    /// — and `didChangeScreenParametersNotification` doesn't always fire (or fires
+    /// before `NSScreen.screens` reflects the reconnected display). Retry the
+    /// restore at staggered intervals because external monitors can take several
+    /// seconds to renegotiate after wake.
+    private func observeWakeNotifications() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        let observer = workspaceCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleWakeRestoreAttempts()
+        }
+        workspaceObservers = [observer]
+    }
+
+    private func scheduleWakeRestoreAttempts() {
+        let delays: [TimeInterval] = [0, 0.5, 1.5, 3, 5, 8]
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.restoreSavedFrameIfPossible()
+            }
+        }
+    }
+
+    private func restoreSavedFrameIfPossible() {
+        guard let saved = preferences.dashboardWindowFrame else { return }
+        let savedCenter = NSPoint(x: saved.midX, y: saved.midY)
+        let savedScreenAvailable = NSScreen.screens.contains { $0.frame.contains(savedCenter) }
+        guard savedScreenAvailable else { return }
+
+        let currentSize = window.frame.size
+        let rightX = saved.origin.x + saved.size.width
+        let topY = saved.origin.y + saved.size.height
+        let target = NSRect(
+            origin: NSPoint(x: rightX - currentSize.width, y: topY - currentSize.height),
+            size: currentSize
+        )
+        if window.frame != target {
+            window.setFrame(target, display: window.isVisible, animate: false)
+        }
     }
 
     private func desiredContentSize(count: Int, metrics: TileMetrics) -> NSSize {
