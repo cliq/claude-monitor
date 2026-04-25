@@ -121,6 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSettings() {
+        // Activate first — when the dashboard window is hidden (menu mode) the
+        // app may not be frontmost, in which case `sendAction` fails silently
+        // because the responder chain has no key window to route through.
+        NSApp.activate(ignoringOtherApps: true)
         if #available(macOS 14, *) {
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         } else {
