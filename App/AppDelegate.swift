@@ -1,5 +1,6 @@
 // App/AppDelegate.swift
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -16,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     )
     private var onboardingWindow: NSWindow?
+    private var windowVisibilityCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 1. Single instance guard.
@@ -64,9 +66,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 6. First-run onboarding.
         if !preferences.hasOnboarded && ProcessInfo.processInfo.environment["CLAUDE_MONITOR_SKIP_ONBOARDING"] != "1" {
             presentOnboarding()
-        } else {
+        } else if preferences.showDashboardWindow {
             dashboard.showAndBringToFront()
         }
+
+        // 7. Honor the show/hide-window preference for the rest of the session.
+        //    `dropFirst()` so we don't immediately re-trigger show/hide on the
+        //    initial value we just respected above.
+        windowVisibilityCancellable = preferences.$showDashboardWindow
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] visible in
+                guard let self else { return }
+                if visible {
+                    self.dashboard.showAndBringToFront()
+                } else {
+                    self.dashboard.hide()
+                }
+            }
     }
 
     private func handleClick(on session: Session) {
@@ -94,7 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.contentView = NSHostingView(rootView: OnboardingView(preferences: preferences) { [weak self, weak window] in
             window?.close()
-            self?.dashboard.showAndBringToFront()
+            if self?.preferences.showDashboardWindow == true {
+                self?.dashboard.showAndBringToFront()
+            }
         })
         window.makeKeyAndOrderFront(nil)
         onboardingWindow = window
