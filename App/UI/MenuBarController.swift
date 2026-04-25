@@ -3,8 +3,9 @@ import AppKit
 import Combine
 import SwiftUI
 
-final class MenuBarController {
+final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
+    private let menu = NSMenu()
     private let store: SessionStore
     private let preferences: Preferences
     private let onSessionClick: (Session) -> Void
@@ -23,9 +24,13 @@ final class MenuBarController {
         self.onOpenDashboard = onOpenDashboard
         self.onOpenSettings = onOpenSettings
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
 
         configureButton()
-        buildMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false
+        statusItem.menu = menu
+        rebuildMenu()
 
         cancellable = store.$orderedSessions
             .receive(on: RunLoop.main)
@@ -39,14 +44,31 @@ final class MenuBarController {
         button.image?.isTemplate = false
     }
 
-    private func buildMenu() {
-        let menu = NSMenu()
+    private func rebuildMenu() {
+        menu.removeAllItems()
 
-        let dashboard = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard), keyEquivalent: "d")
-        dashboard.target = self
-        menu.addItem(dashboard)
+        if preferences.showDashboardWindow {
+            let openItem = NSMenuItem(title: "Open Dashboard",
+                                      action: #selector(openDashboard),
+                                      keyEquivalent: "d")
+            openItem.target = self
+            menu.addItem(openItem)
+        } else {
+            appendSessionRows(into: menu)
+        }
 
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        let toggle = NSMenuItem(title: "Show Dashboard Window",
+                                action: #selector(toggleDashboardWindow),
+                                keyEquivalent: "")
+        toggle.target = self
+        toggle.state = preferences.showDashboardWindow ? .on : .off
+        menu.addItem(toggle)
+
+        menu.addItem(.separator())
+
+        let settings = NSMenuItem(title: "Settings…",
+                                  action: #selector(openSettings),
+                                  keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
 
@@ -54,7 +76,43 @@ final class MenuBarController {
         menu.addItem(NSMenuItem(title: "Quit Claude Monitor",
                                 action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
-        statusItem.menu = menu
+    }
+
+    private func appendSessionRows(into menu: NSMenu) {
+        let sessions = store.orderedSessions
+        if sessions.isEmpty {
+            let empty = NSMenuItem(title: "No active sessions", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+            return
+        }
+        let now = Date()
+        for session in sessions {
+            let item = NSMenuItem(title: rowTitle(for: session, now: now),
+                                  action: #selector(sessionRowClicked(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.image = circleImage(color: SessionStateColor.nsColor(for: session.state))
+            item.toolTip = session.lastPromptPreview
+            item.representedObject = session
+            menu.addItem(item)
+        }
+    }
+
+    private func rowTitle(for session: Session, now: Date) -> String {
+        let secs = max(0, Int(now.timeIntervalSince(session.enteredStateAt)))
+        let elapsed = String(format: "%d:%02d", secs / 60, secs % 60)
+        return "\(session.projectName)  ·  \(session.state.displayLabel) · \(elapsed)"
+    }
+
+    private func circleImage(color: NSColor, size: CGSize = CGSize(width: 14, height: 14)) -> NSImage {
+        let img = NSImage(size: size)
+        img.lockFocus()
+        color.setFill()
+        NSBezierPath(ovalIn: NSRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)).fill()
+        img.unlockFocus()
+        img.isTemplate = false
+        return img
     }
 
     private func refresh(_ sessions: [Session]) {
@@ -84,6 +142,24 @@ final class MenuBarController {
         button.title = needsYou > 0 ? " \(needsYou)" : ""
     }
 
-    @objc private func openDashboard() { onOpenDashboard() }
-    @objc private func openSettings()  { onOpenSettings() }
+    @objc private func openDashboard()         { onOpenDashboard() }
+    @objc private func openSettings()          { onOpenSettings() }
+
+    @objc private func toggleDashboardWindow() {
+        preferences.showDashboardWindow.toggle()
+    }
+
+    @objc private func sessionRowClicked(_ sender: NSMenuItem) {
+        guard let session = sender.representedObject as? Session else { return }
+        onSessionClick(session)
+    }
+}
+
+extension MenuBarController: NSMenuDelegate {
+    /// Fires immediately before the dropdown is displayed. Rebuilding here is
+    /// what keeps elapsed times and the session list fresh on every open and
+    /// reflects toggle-state changes without an explicit observer.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        rebuildMenu()
+    }
 }
