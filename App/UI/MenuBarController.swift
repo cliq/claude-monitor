@@ -57,11 +57,15 @@ final class MenuBarController {
         let anyWaiting = sessions.contains { $0.state == .waiting }
         let anyWorking = sessions.contains { $0.state == .working }
 
-        let color: NSColor
-        if needsYou > 0      { color = NSColor(red: 0xEF/255, green: 0x44/255, blue: 0x44/255, alpha: 1) }
-        else if anyWaiting   { color = NSColor(red: 0xF5/255, green: 0x9E/255, blue: 0x0B/255, alpha: 1) }
-        else if anyWorking   { color = NSColor(red: 0x3B/255, green: 0x82/255, blue: 0xF6/255, alpha: 1) }
-        else                 { color = NSColor(red: 0x6B/255, green: 0x72/255, blue: 0x80/255, alpha: 1) }
+        // Pick the "winning" aggregate state (priority: needsYou > waiting >
+        // working > idle) and reuse the shared per-state palette so the dot in
+        // the status item matches the per-session dots in menu mode.
+        let winning: SessionState
+        if needsYou > 0    { winning = .needsYou }
+        else if anyWaiting { winning = .waiting }
+        else if anyWorking { winning = .working }
+        else               { winning = .finished } // idle → gray
+        let color = SessionStateColor.nsColor(for: winning)
 
         let size = CGSize(width: 16, height: 16)
         let img = NSImage(size: size)
