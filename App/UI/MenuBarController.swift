@@ -57,6 +57,10 @@ final class MenuBarController: NSObject {
             appendSessionRows(into: menu)
         }
 
+        if !preferences.showDashboardWindow {
+            menu.addItem(.separator())
+        }
+
         let toggle = NSMenuItem(title: "Show Dashboard Window",
                                 action: #selector(toggleDashboardWindow),
                                 keyEquivalent: "")
