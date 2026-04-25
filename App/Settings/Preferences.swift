@@ -24,6 +24,13 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(disabledTerminalBundleIDs.sorted(), forKey: Self.disabledTerminalsKey) }
     }
 
+    /// When true (default), the floating dashboard window is shown and the
+    /// menu-bar dropdown stays minimal. When false, the window is hidden and
+    /// sessions render as rows inside the status-item menu.
+    @Published var showDashboardWindow: Bool {
+        didSet { defaults.set(showDashboardWindow, forKey: Self.showWindowKey) }
+    }
+
     /// Last known dashboard window frame (screen coordinates). We manage this manually
     /// instead of relying on `setFrameAutosaveName`, because borderless+floating windows
     /// don't persist reliably through AppKit's built-in autosave.
@@ -48,6 +55,7 @@ final class Preferences: ObservableObject {
     private static let paletteKey           = "paletteID"
     private static let disabledTerminalsKey = "disabledTerminals"
     private static let dashboardFrameKey    = "dashboardWindowFrame"
+    private static let showWindowKey        = "showDashboardWindow"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -64,5 +72,10 @@ final class Preferences: ObservableObject {
             let rect = NSRectFromString(encoded)
             self.dashboardWindowFrame = rect.isEmpty ? nil : rect
         }
+
+        // `object(forKey:) as? Bool` (not `bool(forKey:)`) so a missing key
+        // defaults to `true` rather than `false` — preserving the historical
+        // "window is visible" behavior for upgrading users.
+        self.showDashboardWindow = (defaults.object(forKey: Self.showWindowKey) as? Bool) ?? true
     }
 }
