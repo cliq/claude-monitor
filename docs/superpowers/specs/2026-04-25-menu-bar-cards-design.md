@@ -68,11 +68,14 @@ Standard `NSMenuItem`, no custom view:
 
 ### 2.4 Live elapsed time
 
-Elapsed values are recomputed in `NSMenuDelegate.menuWillOpen(_:)`. No timer
-ticks while the menu is open. Menus auto-close on activation, so staleness is
-bounded to the duration the user holds the menu open. (If this feels frozen
-in practice, a 1Hz `.common`-mode timer can be added later — out of scope for
-v1.)
+Elapsed values are recomputed in `NSMenuDelegate.menuNeedsUpdate(_:)` — the
+canonical pre-display hook for mutating menu contents. The menu is rebuilt
+from scratch on each open, so the toggle checkmark, session list, and elapsed
+times all reflect current state without an explicit observer for each. No
+timer ticks while the menu is open. Menus auto-close on activation, so
+staleness is bounded to the duration the user holds the menu open. (If this
+feels frozen in practice, a 1Hz `.common`-mode timer can be added later —
+out of scope for v1.)
 
 ### 2.5 Window visibility
 
@@ -108,14 +111,17 @@ Gains:
 
 - A new init parameter `onSessionClick: @escaping (Session) -> Void`.
 - A reference to `Preferences` (passed in init).
-- Subscriptions to `preferences.$showDashboardWindow` and
-  `store.$orderedSessions` that both call `rebuildMenu()`.
-- `NSMenuDelegate` conformance — `menuWillOpen(_:)` rebuilds the session
-  rows so elapsed values are fresh on each open.
+- A single owned `NSMenu` instance (`statusItem.menu = menu` once at init)
+  whose contents are cleared and rebuilt by `rebuildMenu()`.
+- `NSMenuDelegate` conformance — `menuNeedsUpdate(_:)` calls `rebuildMenu()`
+  so the toggle checkmark, session list, and elapsed values are all fresh
+  on each open. No separate Combine subscription on the preference is
+  needed inside the controller for menu refresh purposes; the AppDelegate
+  owns the observer that hides/shows the floating window.
 
-The menu is reassembled on each rebuild rather than mutated in place. The
-existing `refresh(_:)` method (which paints the status icon) is kept as-is;
-only the dropdown changes shape.
+The existing `refresh(_:)` method (which paints the status icon) is kept
+as-is; only the dropdown changes shape and now sources its color from
+`SessionStateColor`.
 
 ### 3.3 AppDelegate wiring
 
