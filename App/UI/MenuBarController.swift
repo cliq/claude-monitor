@@ -6,14 +6,20 @@ import SwiftUI
 final class MenuBarController {
     private let statusItem: NSStatusItem
     private let store: SessionStore
+    private let preferences: Preferences
+    private let onSessionClick: (Session) -> Void
     private let onOpenDashboard: () -> Void
     private let onOpenSettings: () -> Void
     private var cancellable: AnyCancellable?
 
     init(store: SessionStore,
+         preferences: Preferences,
+         onSessionClick: @escaping (Session) -> Void,
          onOpenDashboard: @escaping () -> Void,
          onOpenSettings: @escaping () -> Void) {
         self.store = store
+        self.preferences = preferences
+        self.onSessionClick = onSessionClick
         self.onOpenDashboard = onOpenDashboard
         self.onOpenSettings = onOpenSettings
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

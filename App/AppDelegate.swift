@@ -55,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 5. Menu bar.
         menuBar = MenuBarController(
             store: store,
+            preferences: preferences,
+            onSessionClick: { [weak self] session in self?.handleClick(on: session) },
             onOpenDashboard: { [weak self] in self?.dashboard.showAndBringToFront() },
             onOpenSettings:  { [weak self] in self?.openSettings() }
         )
