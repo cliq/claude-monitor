@@ -15,6 +15,10 @@ Each tile represents one Claude Code session and is one of four states:
 | Needs you | red | Claude is blocked on a permission prompt |
 | Finished | grey | Session ended; tile auto-removes shortly after |
 
+<p align="center">
+  <img src="docs/images/dashboard-states.png" alt="Three Claude Monitor tiles showing Working, Needs you, and Waiting states" width="227" />
+</p>
+
 Clicking a tile brings its Terminal.app or iTerm2 tab to the front.
 
 ## How it works
