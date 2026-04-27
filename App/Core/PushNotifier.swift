@@ -40,13 +40,13 @@ final class PushNotifier {
         }
     }
 
-    static func title(for event: HookEvent) -> String {
+    private static func title(for event: HookEvent) -> String {
         let project = projectName(from: event.cwd)
         let status = statusText(for: event)
         return project.isEmpty ? status : "\(project): \(status)"
     }
 
-    static func body(for event: HookEvent) -> String {
+    private static func body(for event: HookEvent) -> String {
         switch event.hook {
         case .stop:
             return "Finished responding."
