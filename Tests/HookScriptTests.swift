@@ -52,7 +52,7 @@ final class HookScriptTests: XCTestCase {
     }
 
     func test_hookScriptForwardsNotificationFields() async throws {
-        let scriptURL = try XCTUnwrap(findHookScript())
+        let scriptURL = try XCTUnwrap(findHookScript(), "could not find hook.sh")
 
         var received: [HookEvent] = []
         let expect = expectation(description: "event")
@@ -92,6 +92,8 @@ final class HookScriptTests: XCTestCase {
         XCTAssertEqual(proc.terminationStatus, 0)
 
         await fulfillment(of: [expect], timeout: 3)
+        XCTAssertEqual(received.count, 1)
+        XCTAssertEqual(received[0].hook, .notification)
         XCTAssertEqual(received[0].notificationType, "idle_prompt")
         XCTAssertEqual(received[0].message, "You there?")
     }
