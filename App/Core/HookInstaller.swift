@@ -2,12 +2,24 @@
 import Foundation
 
 enum HookInstaller {
+    /// Main-hook schema version, also exported for tests. Bumped to 3 when the managed tag
+    /// moved from sidecar keys (`_managedBy`, `_version`) *into* the command string itself —
+    /// `hook.sh SessionStart --managed-by=claude-monitor --version=3`. Some tools that
+    /// process `settings.json` (Claude Code's own loader among them, under some paths)
+    /// re-serialize entries to the published schema and strip unknown keys, which left real
+    /// installs looking "Not installed" even though the hooks were firing. The `command`
+    /// field is schema-defined and survives those rewrites, so the version is encoded there.
     static let currentVersion = 3
 
     private struct Kind {
         let managedValue: String
+        /// Substring matched against the full command string to identify entries we own
+        /// when sidecar keys have been stripped by a foreign serializer. Today this equals
+        /// `scriptRelativePath`; the two stay separate so a future kind can use a shorter
+        /// or partial marker without changing the deployed command path.
         let scriptPathMarker: String
-        let scriptRelativePath: String   // e.g. ".claude-monitor/hook.sh"
+        /// Path relative to `$HOME` that is written into the managed entry's command.
+        let scriptRelativePath: String
         let hooks: [String]
         let currentVersion: Int
     }
@@ -17,7 +29,7 @@ enum HookInstaller {
         scriptPathMarker: ".claude-monitor/hook.sh",
         scriptRelativePath: ".claude-monitor/hook.sh",
         hooks: ["SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd"],
-        currentVersion: 3
+        currentVersion: HookInstaller.currentVersion
     )
 
     private static let offlineKind = Kind(
