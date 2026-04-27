@@ -31,6 +31,16 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(showDashboardWindow, forKey: Self.showWindowKey) }
     }
 
+    /// Master toggle for Prowl push notifications.
+    @Published var prowlEnabled: Bool {
+        didSet { defaults.set(prowlEnabled, forKey: Self.prowlEnabledKey) }
+    }
+
+    /// When true, the offline shell hook is also installed alongside Prowl.
+    @Published var prowlOfflineHookEnabled: Bool {
+        didSet { defaults.set(prowlOfflineHookEnabled, forKey: Self.prowlOfflineKey) }
+    }
+
     /// Last known dashboard window frame (screen coordinates). We manage this manually
     /// instead of relying on `setFrameAutosaveName`, because borderless+floating windows
     /// don't persist reliably through AppKit's built-in autosave.
@@ -56,6 +66,8 @@ final class Preferences: ObservableObject {
     private static let disabledTerminalsKey = "disabledTerminals"
     private static let dashboardFrameKey    = "dashboardWindowFrame"
     private static let showWindowKey        = "showDashboardWindow"
+    private static let prowlEnabledKey      = "prowlEnabled"
+    private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -77,5 +89,8 @@ final class Preferences: ObservableObject {
         // defaults to `true` rather than `false` — preserving the historical
         // "window is visible" behavior for upgrading users.
         self.showDashboardWindow = (defaults.object(forKey: Self.showWindowKey) as? Bool) ?? true
+
+        self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
+        self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)
     }
 }

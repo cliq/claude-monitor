@@ -36,4 +36,21 @@ final class PreferencesTests: XCTestCase {
         let reloaded = Preferences(defaults: defaults)
         XCTAssertEqual(reloaded.disabledTerminalBundleIDs, [])
     }
+
+    func test_prowlPreferencesDefaultToFalseAndPersist() {
+        let suiteName = "test-prowl-prefs-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let prefs = Preferences(defaults: defaults)
+        XCTAssertFalse(prefs.prowlEnabled)
+        XCTAssertFalse(prefs.prowlOfflineHookEnabled)
+
+        prefs.prowlEnabled = true
+        prefs.prowlOfflineHookEnabled = true
+
+        let reloaded = Preferences(defaults: defaults)
+        XCTAssertTrue(reloaded.prowlEnabled)
+        XCTAssertTrue(reloaded.prowlOfflineHookEnabled)
+    }
 }
