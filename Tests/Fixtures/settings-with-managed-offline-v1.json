@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "_managedBy": "claude-monitor-offline-prowl",
+        "_version": 1,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/offline-prowl.sh Stop --managed-by=claude-monitor-offline-prowl --version=1" }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "_managedBy": "claude-monitor-offline-prowl",
+        "_version": 1,
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude-monitor/offline-prowl.sh Notification --managed-by=claude-monitor-offline-prowl --version=1" }
+        ]
+      }
+    ]
+  }
+}

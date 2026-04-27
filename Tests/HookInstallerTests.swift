@@ -198,4 +198,40 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(backupBytes, afterFirstInstallBytes,
                        "rolling backup must reflect state immediately before the most recent write")
     }
+
+    // MARK: Offline-prowl managed entry
+
+    func test_inspectOfflineHookReportsNotInstalledWhenAbsent() throws {
+        _ = try writeSettings("settings-with-managed-v3")
+        let status = try HookInstaller.inspectOfflineHook(configDir: dir)
+        XCTAssertEqual(status.status, .notInstalled)
+    }
+
+    func test_inspectOfflineHookReportsInstalledWhenPresent() throws {
+        _ = try writeSettings("settings-with-managed-offline-v1")
+        let status = try HookInstaller.inspectOfflineHook(configDir: dir)
+        XCTAssertEqual(status.status, .installed)
+        XCTAssertEqual(status.installedVersion, 1)
+    }
+
+    func test_installOfflineHookLeavesMainHookIntact() throws {
+        let url = try writeSettings("settings-with-managed-v3")
+        try HookInstaller.installOfflineHook(configDir: dir)
+
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .installed,
+                       "main hook entry must still be detected")
+        XCTAssertEqual(try HookInstaller.inspectOfflineHook(configDir: dir).status, .installed)
+        // Sanity-check the file has both managed blocks for Stop.
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        let stop = (json?["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]] ?? []
+        XCTAssertEqual(stop.count, 2)
+    }
+
+    func test_uninstallOfflineHookLeavesMainHookIntact() throws {
+        _ = try writeSettings("settings-with-managed-main-and-offline")
+        try HookInstaller.uninstallOfflineHook(configDir: dir)
+
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .installed)
+        XCTAssertEqual(try HookInstaller.inspectOfflineHook(configDir: dir).status, .notInstalled)
+    }
 }
