@@ -5,7 +5,7 @@ import Foundation
 /// and orchestrates installs/uninstalls of the matching hook entries across
 /// all managed config dirs via `HookInstaller`.
 enum OfflineHookDeployer {
-    enum DeployError: Error { case templateMissing }
+    enum DeployError: Error { case templateMissing, renderFailed }
 
     private static let placeholder = "__PROWL_API_KEY__"
     private static let scriptRelativePath = ".claude-monitor/offline-prowl.sh"
@@ -16,6 +16,7 @@ enum OfflineHookDeployer {
                               bundle: Bundle? = nil) throws {
         let template = try loadTemplate(bundle: bundle)
         let rendered = template.replacingOccurrences(of: placeholder, with: apiKey)
+        guard !rendered.contains(placeholder) else { throw DeployError.renderFailed }
 
         let destDir = home.appendingPathComponent(".claude-monitor")
         try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
@@ -57,14 +58,14 @@ enum OfflineHookDeployer {
 
     private static func loadTemplate(bundle: Bundle?) throws -> String {
         let candidates: [Bundle] = [bundle ?? Bundle.main, Bundle(for: Sentinel.self)]
-        for b in candidates {
-            if let url = b.url(forResource: "offline-prowl.sh", withExtension: "template"),
-               let data = try? Data(contentsOf: url),
-               let text = String(data: data, encoding: .utf8) {
-                return text
-            }
+        guard let url = candidates.lazy.compactMap({ $0.url(forResource: "offline-prowl.sh", withExtension: "template") }).first else {
+            throw DeployError.templateMissing
         }
-        throw DeployError.templateMissing
+        let data = try Data(contentsOf: url)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw DeployError.renderFailed
+        }
+        return text
     }
 
     private final class Sentinel {}
