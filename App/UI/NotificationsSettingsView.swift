@@ -82,9 +82,10 @@ struct NotificationsSettingsView: View {
                     .foregroundStyle(status == .success ? .green : (status == .sending ? .secondary : .red))
             }
 
-            Text("Get a key at prowlapp.com → Settings → API Keys.")
+            Text("Get a key at [prowlapp.com](https://www.prowlapp.com/api_settings.php) → Settings → API Keys.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .tint(.accentColor)
 
             if keyExists {
                 Button("Remove key", role: .destructive) { removeKey() }
