@@ -1,0 +1,79 @@
+#!/bin/bash
+# claude-monitor offline Prowl hook — installed to ~/.claude-monitor/offline-prowl.sh
+# when the user enables "Send pushes even when ClaudeMonitor isn't running".
+# Probes the running monitor via GET /health; if the monitor responds, exits 0
+# (the in-app PushNotifier is handling the event). Otherwise, parses Claude's
+# stdin payload and POSTs to api.prowlapp.com directly.
+# Always exits 0 so hook failures can never affect the Claude session.
+
+set +e
+
+# The deployer substitutes this placeholder with the real key at install time.
+PROWL_API_KEY='__PROWL_API_KEY__'
+
+PORT_FILE="$HOME/.claude-monitor/port"
+if [ -f "$PORT_FILE" ]; then
+  PORT="$(tr -d ' \n\r' < "$PORT_FILE")"
+  if [ -n "$PORT" ]; then
+    if curl -fsS -m 1 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+      exit 0   # monitor is up; in-app path is handling this event.
+    fi
+  fi
+fi
+
+STDIN_JSON="$(cat 2>/dev/null)"
+[ -n "$STDIN_JSON" ] || STDIN_JSON="{}"
+HOOK_NAME="${1:-unknown}"
+CWD_VAL="$(pwd)"
+export STDIN_JSON HOOK_NAME CWD_VAL PROWL_API_KEY
+
+if ! command -v python3 >/dev/null 2>&1; then
+  exit 0   # without python3 we can't safely parse Claude's payload.
+fi
+
+PYTHONIOENCODING=utf-8 python3 - <<'PY'
+import json, os, sys
+from urllib import request, parse
+
+src = {}
+try:
+    src = json.loads(os.environ.get("STDIN_JSON") or "{}")
+except Exception:
+    pass
+
+hook = os.environ.get("HOOK_NAME") or src.get("hook_event_name") or "Unknown"
+cwd  = src.get("cwd") or os.environ.get("CWD_VAL") or ""
+project = os.path.basename(cwd) if cwd else ""
+
+if hook == "Stop":
+    status = "Done"
+    body   = "Finished responding."
+elif hook == "Notification":
+    nt = src.get("notification_type")
+    status = {
+        "permission_prompt":  "Permission needed",
+        "idle_prompt":        "Waiting for you",
+        "elicitation_dialog": "Needs input",
+    }.get(nt, "Notification")
+    body = src.get("message") or "Claude Code sent a notification."
+else:
+    sys.exit(0)   # only Stop and Notification trigger pushes.
+
+title = f"{project}: {status}" if project else status
+data  = parse.urlencode({
+    "apikey":      os.environ["PROWL_API_KEY"],
+    "application": "Claude Monitor",
+    "event":       title,
+    "description": body,
+    "priority":    "0",
+}).encode("utf-8")
+
+try:
+    req = request.Request("https://api.prowlapp.com/publicapi/add", data=data, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    request.urlopen(req, timeout=5).read()
+except Exception:
+    pass
+PY
+
+exit 0

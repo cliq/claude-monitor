@@ -24,6 +24,8 @@ targets:
       - path: App
       - path: scripts/hook.sh
         buildPhase: resources
+      - path: scripts/offline-prowl.sh.template
+        buildPhase: resources
     info:
       path: App/Info.plist
       properties:
@@ -52,6 +54,8 @@ targets:
     sources:
       - path: Tests
       - path: scripts/hook.sh
+        buildPhase: resources
+      - path: scripts/offline-prowl.sh.template
         buildPhase: resources
       - path: Tests/Fixtures
         buildPhase: resources
