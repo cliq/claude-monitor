@@ -56,4 +56,16 @@ final class EventServerTests: XCTestCase {
         let (_, response) = try await URLSession.shared.data(for: req)
         XCTAssertEqual((response as! HTTPURLResponse).statusCode, 405)
     }
+
+    func test_serverRespondsToHealthCheck() async throws {
+        let server = EventServer { _ in }
+        try server.start()
+        defer { server.stop() }
+
+        let port = try XCTUnwrap(server.port)
+        let req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/health")!)
+
+        let (_, response) = try await URLSession.shared.data(for: req)
+        XCTAssertEqual((response as! HTTPURLResponse).statusCode, 200)
+    }
 }

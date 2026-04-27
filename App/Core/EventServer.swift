@@ -76,6 +76,11 @@ final class EventServer {
             connection.cancel()
         }) }
 
+        if req.method == "GET" && req.path == "/health" {
+            send(status: 200, message: "OK", connection: connection)
+            return
+        }
+
         guard req.method == "POST", req.path == "/event" else {
             send(status: 405, message: "Method Not Allowed", connection: connection)
             return
