@@ -102,4 +102,16 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.orderedSessions.count, 0)
     }
 
+    func test_applyForwardsEventToPushNotifier() {
+        var captured: [HookEvent] = []
+        let store = SessionStore(clock: SystemClock(), onEventApplied: { captured.append($0) })
+
+        let event = HookEvent(hook: .stop, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                              ts: 0, promptPreview: nil, toolName: nil,
+                              notificationType: nil, message: nil)
+        store.apply(event)
+        XCTAssertEqual(captured.count, 1)
+        XCTAssertEqual(captured[0].sessionId, "s")
+    }
+
 }

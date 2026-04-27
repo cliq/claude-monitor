@@ -5,7 +5,8 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let preferences = Preferences()
-    private let store = SessionStore()
+    private var store: SessionStore!
+    private var pushNotifier: PushNotifier!
     private var server: EventServer!
     private var sweeper: StaleSessionSweeper!
     private var dashboard: DashboardWindow!
@@ -25,6 +26,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+
+        // 1b. Build the push notifier and wire it into the session store so every
+        //     applied event is considered for a Prowl push (gated by master toggle).
+        let prowlClient = ProwlClient()
+        pushNotifier = PushNotifier(
+            preferences: preferences,
+            keychainGetter: { try? KeychainStore.prowl.get() },
+            prowlSend: prowlClient.send
+        )
+
+        store = SessionStore(onEventApplied: { [weak self] event in
+            self?.pushNotifier.handle(event: event)
+        })
 
         // 2. Start the HTTP server and publish its port.
         server = EventServer { [weak self] event in

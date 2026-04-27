@@ -6,12 +6,16 @@ final class SessionStore: ObservableObject {
     @Published private(set) var orderedSessions: [Session] = []
 
     private let clock: Clock
+    private let onEventApplied: (HookEvent) -> Void
 
-    init(clock: Clock = SystemClock()) {
+    init(clock: Clock = SystemClock(),
+         onEventApplied: @escaping (HookEvent) -> Void = { _ in }) {
         self.clock = clock
+        self.onEventApplied = onEventApplied
     }
 
     func apply(_ event: HookEvent) {
+        defer { onEventApplied(event) }
         let existing = orderedSessions.firstIndex { $0.id == event.sessionId }
 
         if let idx = existing {
