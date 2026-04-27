@@ -40,9 +40,7 @@ If you juggle multiple Claude configs, pair it with [claudewho](https://github.c
 
 ## Push notifications (optional)
 
-Get a phone push every time a session needs your attention or finishes via [Prowl](https://www.prowlapp.com/). Enable it in **Settings → Push Notifications**, paste your Prowl API key, and click **Test** to verify. The key lives in the macOS Keychain.
-
-Optional **offline mode** installs a small fallback shell hook so pushes still fire when Claude Monitor isn't running — at the cost of storing the key in plain text under `~/.claude-monitor/`.
+Get a phone push every time a session needs your attention or finishes via [Prowl](https://www.prowlapp.com/). Enable it in **Settings → Push Notifications**, paste your Prowl API key, and click **Test** to verify.
 
 ## Requirements
 
