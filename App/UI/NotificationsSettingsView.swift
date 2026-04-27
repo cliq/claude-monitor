@@ -7,6 +7,7 @@ struct NotificationsSettingsView: View {
     @State private var apiKey: String = ""
     @State private var status: TestStatus = .idle
     @State private var keyExists: Bool = false
+    @State private var clearTask: Task<Void, Never>?
 
     private let keychain: KeychainStore
     private let prowl: ProwlClient
@@ -75,7 +76,7 @@ struct NotificationsSettingsView: View {
     }
 
     private func loadKeyState() {
-        let existing = (try? keychain.get()) ?? nil
+        let existing = try? keychain.get()
         keyExists = (existing != nil)
         apiKey = existing ?? ""
     }
@@ -83,6 +84,7 @@ struct NotificationsSettingsView: View {
     private func runTest() async {
         let trimmed = apiKey.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
+        clearTask?.cancel()
         status = .sending
         do { try keychain.set(trimmed); keyExists = true }
         catch { status = .failure("Couldn't save key to Keychain (\(error)).") ; return }
@@ -102,13 +104,14 @@ struct NotificationsSettingsView: View {
         case .failure(.http(let code, _)):
             status = .failure("Prowl error (HTTP \(code)).")
         }
-        Task { @MainActor in
+        clearTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            status = .idle
+            if !Task.isCancelled { status = .idle }
         }
     }
 
     private func removeKey() {
+        clearTask?.cancel()
         try? keychain.delete()
         apiKey = ""
         keyExists = false
