@@ -5,10 +5,8 @@ final class ProwlClientTests: XCTestCase {
     override func setUp() {
         super.setUp()
         URLProtocolStub.reset()
-        URLProtocol.registerClass(URLProtocolStub.self)
     }
     override func tearDown() {
-        URLProtocol.unregisterClass(URLProtocolStub.self)
         URLProtocolStub.reset()
         super.tearDown()
     }
@@ -30,7 +28,7 @@ final class ProwlClientTests: XCTestCase {
             XCTAssertTrue(body.contains("event=proj%3A%20Done"))
             XCTAssertTrue(body.contains("description=Finished%20responding."))
             XCTAssertTrue(body.contains("priority=0"))
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
+            return .success((HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data()))
         }
 
         let result = await makeClient().send(apiKey: "KEY",
@@ -41,7 +39,7 @@ final class ProwlClientTests: XCTestCase {
 
     func test_send401MapsToInvalidAPIKey() async throws {
         URLProtocolStub.responder = { req in
-            (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data())
+            .success((HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data()))
         }
         let result = await makeClient().send(apiKey: "X", event: "e", description: "d")
         guard case .failure(.invalidAPIKey) = result else { return XCTFail("got \(result)") }
@@ -49,7 +47,7 @@ final class ProwlClientTests: XCTestCase {
 
     func test_send406MapsToRateLimited() async throws {
         URLProtocolStub.responder = { req in
-            (HTTPURLResponse(url: req.url!, statusCode: 406, httpVersion: nil, headerFields: nil)!, Data())
+            .success((HTTPURLResponse(url: req.url!, statusCode: 406, httpVersion: nil, headerFields: nil)!, Data()))
         }
         let result = await makeClient().send(apiKey: "X", event: "e", description: "d")
         guard case .failure(.rateLimited) = result else { return XCTFail("got \(result)") }
@@ -57,23 +55,39 @@ final class ProwlClientTests: XCTestCase {
 
     func test_send500MapsToHttp() async throws {
         URLProtocolStub.responder = { req in
-            (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
-             "boom".data(using: .utf8)!)
+            .success((HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
+                      "boom".data(using: .utf8)!))
         }
         let result = await makeClient().send(apiKey: "X", event: "e", description: "d")
         guard case .failure(.http(let code, let body)) = result else { return XCTFail("got \(result)") }
         XCTAssertEqual(code, 500)
         XCTAssertEqual(body, "boom")
     }
+
+    func test_send400MapsToHttp() async throws {
+        URLProtocolStub.responder = { req in
+            .success((HTTPURLResponse(url: req.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!,
+                      "bad".data(using: .utf8)!))
+        }
+        let result = await makeClient().send(apiKey: "X", event: "e", description: "d")
+        guard case .failure(.http(let code, let body)) = result else { return XCTFail("got \(result)") }
+        XCTAssertEqual(code, 400)
+        XCTAssertEqual(body, "bad")
+    }
+
+    func test_sendNetworkErrorMapsToNetworkCase() async throws {
+        URLProtocolStub.responder = { _ in .failure(URLError(.notConnectedToInternet)) }
+        let result = await makeClient().send(apiKey: "X", event: "e", description: "d")
+        guard case .failure(.network(let urlErr)) = result else { return XCTFail("got \(result)") }
+        XCTAssertEqual(urlErr.code, .notConnectedToInternet)
+    }
 }
 
 private final class URLProtocolStub: URLProtocol {
-    nonisolated(unsafe) static var responder: ((URLRequest) -> (HTTPURLResponse, Data))?
-    nonisolated(unsafe) static var capturedBodies: [URL: Data] = [:]
+    nonisolated(unsafe) static var responder: ((URLRequest) -> Result<(HTTPURLResponse, Data), URLError>)?
 
     static func reset() {
         responder = nil
-        capturedBodies = [:]
     }
 
     static func bodyOf(_ req: URLRequest) -> Data? {
@@ -96,10 +110,14 @@ private final class URLProtocolStub: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let r = Self.responder else { fatalError("no responder set") }
-        let (resp, data) = r(request)
-        client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
+        switch r(request) {
+        case .success(let (resp, data)):
+            client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        case .failure(let urlError):
+            client?.urlProtocol(self, didFailWithError: urlError)
+        }
     }
     override func stopLoading() {}
 }
