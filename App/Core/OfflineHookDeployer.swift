@@ -5,7 +5,17 @@ import Foundation
 /// and orchestrates installs/uninstalls of the matching hook entries across
 /// all managed config dirs via `HookInstaller`.
 enum OfflineHookDeployer {
-    enum DeployError: Error { case templateMissing, renderFailed }
+    enum DeployError: LocalizedError {
+        case templateMissing
+        case renderFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .templateMissing: return "Offline hook template is missing from the app bundle — try reinstalling ClaudeMonitor."
+            case .renderFailed:    return "Failed to embed the API key into the offline hook script."
+            }
+        }
+    }
 
     private static let placeholder = "__PROWL_API_KEY__"
     private static let scriptRelativePath = ".claude-monitor/offline-prowl.sh"

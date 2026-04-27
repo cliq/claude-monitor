@@ -100,8 +100,9 @@ struct NotificationsSettingsView: View {
             Toggle("Send pushes even when ClaudeMonitor isn't running",
                    isOn: $preferences.prowlOfflineHookEnabled)
                 .onChange(of: preferences.prowlOfflineHookEnabled) { _, newValue in
-                    guard preferences.prowlEnabled, let key = currentKey() else {
-                        if newValue && currentKey() == nil {
+                    guard preferences.prowlEnabled else { return }
+                    guard let key = currentKey() else {
+                        if newValue {
                             offlineError = "Enter and save your Prowl API key first."
                             preferences.prowlOfflineHookEnabled = false
                         }
