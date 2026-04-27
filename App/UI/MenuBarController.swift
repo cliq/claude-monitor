@@ -47,18 +47,16 @@ final class MenuBarController: NSObject {
     private func rebuildMenu() {
         menu.removeAllItems()
 
+        appendSessionRows(into: menu)
+
+        menu.addItem(.separator())
+
         if preferences.showDashboardWindow {
             let openItem = NSMenuItem(title: "Open Dashboard",
                                       action: #selector(openDashboard),
                                       keyEquivalent: "d")
             openItem.target = self
             menu.addItem(openItem)
-        } else {
-            appendSessionRows(into: menu)
-        }
-
-        if !preferences.showDashboardWindow {
-            menu.addItem(.separator())
         }
 
         let toggle = NSMenuItem(title: "Show Dashboard Window",

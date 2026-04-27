@@ -125,10 +125,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // app may not be frontmost, in which case `sendAction` fails silently
         // because the responder chain has no key window to route through.
         NSApp.activate(ignoringOtherApps: true)
-        if #available(macOS 14, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        // Trigger the Settings item from the application menu directly. This is
+        // what Cmd+, routes to and is more reliable than `sendAction(_:to:nil)`,
+        // which depends on a key window being present to walk the responder chain.
+        DispatchQueue.main.async {
+            guard let appMenu = NSApp.mainMenu?.items.first?.submenu else { return }
+            let item = appMenu.items.first { menuItem in
+                let title = menuItem.title
+                return title.hasPrefix("Settings") || title.hasPrefix("Preferences")
+            }
+            if let item, let action = item.action {
+                NSApp.sendAction(action, to: item.target, from: item)
+            }
         }
     }
 
