@@ -104,7 +104,7 @@ final class SessionStoreTests: XCTestCase {
 
     func test_applyForwardsEventToPushNotifier() {
         var captured: [HookEvent] = []
-        let store = SessionStore(clock: SystemClock(), onEventApplied: { captured.append($0) })
+        let store = SessionStore(clock: FakeClock(), onEventApplied: { captured.append($0) })
 
         let event = HookEvent(hook: .stop, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
                               ts: 0, promptPreview: nil, toolName: nil,
@@ -112,6 +112,27 @@ final class SessionStoreTests: XCTestCase {
         store.apply(event)
         XCTAssertEqual(captured.count, 1)
         XCTAssertEqual(captured[0].sessionId, "s")
+    }
+
+    func test_applyForwardsEventEvenWhenSessionIsRemoved() {
+        var captured: [HookEvent] = []
+        let store = SessionStore(clock: FakeClock(), onEventApplied: { captured.append($0) })
+
+        // Seed: SessionStart creates a session in `waiting`.
+        let start = HookEvent(hook: .sessionStart, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                              ts: 0, promptPreview: nil, toolName: nil,
+                              notificationType: nil, message: nil)
+        store.apply(start)
+
+        // SessionEnd removes the session — the callback must STILL fire.
+        let end = HookEvent(hook: .sessionEnd, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                            ts: 0, promptPreview: nil, toolName: nil,
+                            notificationType: nil, message: nil)
+        store.apply(end)
+
+        XCTAssertEqual(captured.count, 2)
+        XCTAssertEqual(captured.map(\.hook), [.sessionStart, .sessionEnd])
+        XCTAssertTrue(store.orderedSessions.isEmpty, "session should have been removed by .sessionEnd")
     }
 
 }

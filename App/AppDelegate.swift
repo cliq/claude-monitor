@@ -36,8 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prowlSend: prowlClient.send
         )
 
-        store = SessionStore(onEventApplied: { [weak self] event in
-            self?.pushNotifier.handle(event: event)
+        let notifier = pushNotifier!
+        store = SessionStore(onEventApplied: { [weak notifier] event in
+            notifier?.handle(event: event)
         })
 
         // 2. Start the HTTP server and publish its port.
