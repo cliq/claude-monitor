@@ -1,8 +1,8 @@
 import Foundation
 import Network
 
-/// Minimal single-endpoint HTTP server for receiving hook events on localhost.
-/// Accepts `POST /event` with a JSON `HookEvent` body.
+/// Minimal HTTP server for receiving hook events on localhost.
+/// Accepts `POST /event` with a JSON `HookEvent` body and `GET /health` for liveness probes.
 final class EventServer {
     private let onEvent: (HookEvent) -> Void
     private var listener: NWListener?
