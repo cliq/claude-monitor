@@ -10,7 +10,8 @@ final class SessionStoreTests: XCTestCase {
                        ts: Int = 0,
                        promptPreview: String? = nil) -> HookEvent {
         HookEvent(hook: hook, sessionId: session, tty: tty, pid: pid, cwd: cwd,
-                  ts: ts, promptPreview: promptPreview, toolName: nil)
+                  ts: ts, promptPreview: promptPreview, toolName: nil,
+                  notificationType: nil, message: nil)
     }
 
     func test_sessionStartCreatesSessionInWaiting() {

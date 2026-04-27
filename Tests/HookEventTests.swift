@@ -43,4 +43,34 @@ final class HookEventTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(HookEvent.self, from: json))
     }
+
+    func test_decodesNotificationWithSubtypeAndMessage() throws {
+        let json = """
+        {
+          "hook": "Notification",
+          "session_id": "n1",
+          "tty": "/dev/ttys001",
+          "pid": 1,
+          "cwd": "/work",
+          "ts": 1,
+          "notification_type": "permission_prompt",
+          "message": "Allow Claude to read /etc/hosts?"
+        }
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertEqual(event.hook, .notification)
+        XCTAssertEqual(event.notificationType, "permission_prompt")
+        XCTAssertEqual(event.message, "Allow Claude to read /etc/hosts?")
+    }
+
+    func test_decodesEventWithoutSubtypeOrMessage() throws {
+        let json = """
+        {"hook":"Stop","session_id":"x","tty":"/","pid":1,"cwd":"/","ts":1}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertNil(event.notificationType)
+        XCTAssertNil(event.message)
+    }
 }

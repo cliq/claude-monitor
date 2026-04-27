@@ -17,15 +17,19 @@ struct HookEvent: Codable, Equatable {
     let ts: Int
     let promptPreview: String?
     let toolName: String?
+    let notificationType: String?
+    let message: String?
 
     enum CodingKeys: String, CodingKey {
         case hook
-        case sessionId      = "session_id"
+        case sessionId        = "session_id"
         case tty
         case pid
         case cwd
         case ts
-        case promptPreview  = "prompt_preview"
-        case toolName       = "tool_name"
+        case promptPreview    = "prompt_preview"
+        case toolName         = "tool_name"
+        case notificationType = "notification_type"
+        case message
     }
 }

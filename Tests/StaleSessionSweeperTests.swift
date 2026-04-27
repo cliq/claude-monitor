@@ -5,7 +5,8 @@ import XCTest
 final class StaleSessionSweeperTests: XCTestCase {
     private func event(session: String, pid: Int32, hook: HookName = .sessionStart) -> HookEvent {
         HookEvent(hook: hook, sessionId: session, tty: "/dev/ttys001", pid: pid,
-                  cwd: "/p/\(session)", ts: 0, promptPreview: nil, toolName: nil)
+                  cwd: "/p/\(session)", ts: 0, promptPreview: nil, toolName: nil,
+                  notificationType: nil, message: nil)
     }
 
     func test_sweepRemovesDeadProcessSessions() {
