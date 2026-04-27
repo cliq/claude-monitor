@@ -17,6 +17,10 @@ struct SettingsView: View {
             TerminalsSettingsView(preferences: preferences)
                 .frame(width: 560, height: 320)
                 .tabItem { Label("Terminals", systemImage: "terminal") }
+
+            NotificationsSettingsView(preferences: preferences)
+                .frame(width: 560, height: 420)
+                .tabItem { Label("Push Notifications", systemImage: "bell.badge") }
         }
     }
 }
