@@ -51,6 +51,51 @@ final class HookScriptTests: XCTestCase {
         XCTAssertEqual(received[0].promptPreview, "Hello world from the test")
     }
 
+    func test_hookScriptForwardsNotificationFields() async throws {
+        let scriptURL = try XCTUnwrap(findHookScript())
+
+        var received: [HookEvent] = []
+        let expect = expectation(description: "event")
+        let server = EventServer { event in
+            received.append(event)
+            expect.fulfill()
+        }
+        try server.start()
+        defer { server.stop() }
+
+        let tmpHome = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("claude-monitor-hooktest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: tmpHome.appendingPathComponent(".claude-monitor"),
+            withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpHome) }
+
+        try "\(server.port!)\n".write(
+            to: tmpHome.appendingPathComponent(".claude-monitor/port"),
+            atomically: true, encoding: .utf8)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = [scriptURL.path, "Notification"]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = tmpHome.path
+        proc.environment = env
+
+        let inputPipe = Pipe()
+        proc.standardInput = inputPipe
+        try proc.run()
+        inputPipe.fileHandleForWriting.write(#"""
+        {"session_id":"s1","notification_type":"idle_prompt","message":"You there?"}
+        """#.data(using: .utf8)!)
+        try inputPipe.fileHandleForWriting.close()
+        proc.waitUntilExit()
+        XCTAssertEqual(proc.terminationStatus, 0)
+
+        await fulfillment(of: [expect], timeout: 3)
+        XCTAssertEqual(received[0].notificationType, "idle_prompt")
+        XCTAssertEqual(received[0].message, "You there?")
+    }
+
     /// Resolve the hook.sh location. Prefer the bundled test resource (the xcodegen
     /// project adds scripts/hook.sh as a test-target resource), fallback to walking
     /// up from the test-bundle URL to the repo root.

@@ -55,6 +55,12 @@ if isinstance(preview, str):
 tool = src.get("tool_name")
 if isinstance(tool, str):
     out["tool_name"] = tool
+notif_type = src.get("notification_type")
+if isinstance(notif_type, str):
+    out["notification_type"] = notif_type
+msg = src.get("message")
+if isinstance(msg, str):
+    out["message"] = msg
 print(json.dumps(out))
 PY
 )"
