@@ -51,7 +51,10 @@ final class PushNotifier {
         case .stop:
             return "Finished responding."
         case .notification:
-            return event.message ?? "Claude Code sent a notification."
+            if let message = event.message, !message.isEmpty {
+                return message
+            }
+            return "Waiting for you."
         default:
             return ""
         }

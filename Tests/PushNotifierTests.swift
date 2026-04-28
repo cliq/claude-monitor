@@ -77,15 +77,30 @@ final class PushNotifierTests: XCTestCase {
         ])
     }
 
-    func test_notificationUsesProvidedMessageOrFallback() async {
+    func test_idlePromptFallsBackToWaitingForYou() async {
         preferences.prowlEnabled = true
         keychain.value = "k"
 
         await notifier.handleAndAwait(event(.notification, notificationType: "idle_prompt", message: "wake up"))
         await notifier.handleAndAwait(event(.notification, notificationType: "idle_prompt", message: nil))
+        await notifier.handleAndAwait(event(.notification, notificationType: "idle_prompt", message: ""))
 
         XCTAssertEqual(prowl.calls[0].description, "wake up")
-        XCTAssertEqual(prowl.calls[1].description, "Claude Code sent a notification.")
+        XCTAssertEqual(prowl.calls[1].description, "Waiting for you.")
+        XCTAssertEqual(prowl.calls[2].description, "Waiting for you.")
+    }
+
+    func test_otherNotificationsUseProvidedMessageOrFallBackToWaitingForYou() async {
+        preferences.prowlEnabled = true
+        keychain.value = "k"
+
+        await notifier.handleAndAwait(event(.notification, notificationType: "permission_prompt", message: "Allow Bash?"))
+        await notifier.handleAndAwait(event(.notification, notificationType: "permission_prompt", message: nil))
+        await notifier.handleAndAwait(event(.notification, notificationType: nil, message: nil))
+
+        XCTAssertEqual(prowl.calls[0].description, "Allow Bash?")
+        XCTAssertEqual(prowl.calls[1].description, "Waiting for you.")
+        XCTAssertEqual(prowl.calls[2].description, "Waiting for you.")
     }
 
     func test_emptyCwdOmitsProjectPrefix() async {
