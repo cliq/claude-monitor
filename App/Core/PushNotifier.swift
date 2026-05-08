@@ -6,16 +6,21 @@ final class PushNotifier {
     typealias Send = (_ apiKey: String, _ event: String, _ description: String) async -> Result<Void, ProwlClient.Error>
     typealias KeyGetter = () -> String?
 
+    typealias IsIgnored = (_ sessionId: String) -> Bool
+
     private let preferences: Preferences
     private let keychainGetter: KeyGetter
     private let prowlSend: Send
+    private let isIgnored: IsIgnored
 
     init(preferences: Preferences,
          keychainGetter: @escaping KeyGetter,
-         prowlSend: @escaping Send) {
+         prowlSend: @escaping Send,
+         isIgnored: @escaping IsIgnored = { _ in false }) {
         self.preferences = preferences
         self.keychainGetter = keychainGetter
         self.prowlSend = prowlSend
+        self.isIgnored = isIgnored
     }
 
     /// Returns a `Task` so the caller can await dispatch in tests; production
@@ -25,6 +30,7 @@ final class PushNotifier {
     func handle(event: HookEvent) -> Task<Void, Never> {
         guard preferences.prowlEnabled else { return Task {} }
         guard event.hook == .stop || event.hook == .notification else { return Task {} }
+        guard !isIgnored(event.sessionId) else { return Task {} }
         guard let key = keychainGetter(), !key.isEmpty else {
             NSLog("PushNotifier: skipping push — Prowl API key is not configured")
             return Task {}

@@ -4,6 +4,7 @@ import Combine
 
 final class SessionStore: ObservableObject {
     @Published private(set) var orderedSessions: [Session] = []
+    @Published private(set) var ignoredSessionIds: Set<String> = []
 
     private let clock: Clock
     private let onEventApplied: (HookEvent) -> Void
@@ -12,6 +13,16 @@ final class SessionStore: ObservableObject {
          onEventApplied: @escaping (HookEvent) -> Void = { _ in }) {
         self.clock = clock
         self.onEventApplied = onEventApplied
+    }
+
+    /// Sessions visible in the dashboard, menu bar list, and badge aggregates.
+    var visibleSessions: [Session] {
+        orderedSessions.filter { !ignoredSessionIds.contains($0.id) }
+    }
+
+    /// Sessions the user has chosen to silence, in the same order as `orderedSessions`.
+    var ignoredSessions: [Session] {
+        orderedSessions.filter { ignoredSessionIds.contains($0.id) }
     }
 
     func apply(_ event: HookEvent) {
@@ -25,6 +36,7 @@ final class SessionStore: ObservableObject {
 
             if newState == .finished {
                 orderedSessions.remove(at: idx)
+                ignoredSessionIds.remove(event.sessionId)
                 return
             }
 
@@ -59,6 +71,15 @@ final class SessionStore: ObservableObject {
     /// and the StaleSessionSweeper). No-op if unknown.
     func markFinished(sessionId: String) {
         orderedSessions.removeAll { $0.id == sessionId }
+        ignoredSessionIds.remove(sessionId)
+    }
+
+    func ignore(sessionId: String) {
+        ignoredSessionIds.insert(sessionId)
+    }
+
+    func unignore(sessionId: String) {
+        ignoredSessionIds.remove(sessionId)
     }
 
 }

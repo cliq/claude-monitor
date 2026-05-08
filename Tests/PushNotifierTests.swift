@@ -103,6 +103,27 @@ final class PushNotifierTests: XCTestCase {
         XCTAssertEqual(prowl.calls[2].description, "Waiting for you.")
     }
 
+    func test_skipsPushWhenSessionIsIgnored() async {
+        var ignoredIds: Set<String> = []
+        notifier = PushNotifier(
+            preferences: preferences,
+            keychainGetter: keychain.get,
+            prowlSend: prowl.send,
+            isIgnored: { ignoredIds.contains($0) }
+        )
+        preferences.prowlEnabled = true
+        keychain.value = "k"
+
+        ignoredIds.insert("s")
+        await notifier.handleAndAwait(event(.stop))
+        await notifier.handleAndAwait(event(.notification, notificationType: "permission_prompt"))
+        XCTAssertEqual(prowl.calls.count, 0, "ignored sessions must not produce pushes")
+
+        ignoredIds.remove("s")
+        await notifier.handleAndAwait(event(.stop))
+        XCTAssertEqual(prowl.calls.count, 1, "unignoring restores normal push behavior")
+    }
+
     func test_emptyCwdOmitsProjectPrefix() async {
         preferences.prowlEnabled = true
         keychain.value = "k"

@@ -11,7 +11,7 @@ final class MenuBarController: NSObject {
     private let onSessionClick: (Session) -> Void
     private let onOpenDashboard: () -> Void
     private let onOpenSettings: () -> Void
-    private var cancellable: AnyCancellable?
+    private var cancellables: Set<AnyCancellable> = []
 
     init(store: SessionStore,
          preferences: Preferences,
@@ -32,10 +32,15 @@ final class MenuBarController: NSObject {
         statusItem.menu = menu
         rebuildMenu()
 
-        cancellable = store.$orderedSessions
+        store.$orderedSessions
             .receive(on: RunLoop.main)
-            .sink { [weak self] sessions in self?.refresh(sessions) }
-        refresh(store.orderedSessions)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+        store.$ignoredSessionIds
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+        refresh()
     }
 
     private func configureButton() {
@@ -48,6 +53,8 @@ final class MenuBarController: NSObject {
         menu.removeAllItems()
 
         appendSessionRows(into: menu)
+
+        appendIgnoredSubmenu(into: menu)
 
         menu.addItem(.separator())
 
@@ -81,7 +88,7 @@ final class MenuBarController: NSObject {
     }
 
     private func appendSessionRows(into menu: NSMenu) {
-        let sessions = store.orderedSessions
+        let sessions = store.visibleSessions
         if sessions.isEmpty {
             let empty = NSMenuItem(title: "No active sessions", action: nil, keyEquivalent: "")
             empty.isEnabled = false
@@ -101,6 +108,27 @@ final class MenuBarController: NSObject {
         }
     }
 
+    private func appendIgnoredSubmenu(into menu: NSMenu) {
+        let ignored = store.ignoredSessions
+        guard !ignored.isEmpty else { return }
+
+        let parent = NSMenuItem(title: "Ignored Sessions", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        let now = Date()
+        for session in ignored {
+            let item = NSMenuItem(title: rowTitle(for: session, now: now),
+                                  action: #selector(ignoredRowClicked(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.image = circleImage(color: SessionStateColor.nsColor(for: session.state))
+            item.toolTip = "Click to unignore"
+            item.representedObject = session
+            submenu.addItem(item)
+        }
+        parent.submenu = submenu
+        menu.addItem(parent)
+    }
+
     private func rowTitle(for session: Session, now: Date) -> String {
         let secs = max(0, Int(now.timeIntervalSince(session.enteredStateAt)))
         let elapsed = String(format: "%d:%02d", secs / 60, secs % 60)
@@ -117,8 +145,9 @@ final class MenuBarController: NSObject {
         return img
     }
 
-    private func refresh(_ sessions: [Session]) {
+    private func refresh() {
         guard let button = statusItem.button else { return }
+        let sessions = store.visibleSessions
         let needsYou = sessions.filter { $0.state == .needsYou }.count
         let anyWaiting = sessions.contains { $0.state == .waiting }
         let anyWorking = sessions.contains { $0.state == .working }
@@ -154,6 +183,11 @@ final class MenuBarController: NSObject {
     @objc private func sessionRowClicked(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
         onSessionClick(session)
+    }
+
+    @objc private func ignoredRowClicked(_ sender: NSMenuItem) {
+        guard let session = sender.representedObject as? Session else { return }
+        store.unignore(sessionId: session.id)
     }
 }
 

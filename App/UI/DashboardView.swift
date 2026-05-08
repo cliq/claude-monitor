@@ -16,8 +16,10 @@ struct DashboardView: View {
         let metrics = TileMetrics.resolve(preferences.tileSize)
         let palette = Palette.resolve(preferences.paletteID)
 
+        let sessions = store.visibleSessions
+
         return Group {
-            if store.orderedSessions.isEmpty {
+            if sessions.isEmpty {
                 emptyState
             } else {
                 VerticalFirstGridLayout(
@@ -25,21 +27,26 @@ struct DashboardView: View {
                     gutter: metrics.gutter,
                     padding: metrics.padding
                 ) {
-                    ForEach(store.orderedSessions) { session in
+                    ForEach(sessions) { session in
                         TileView(session: session, now: now, metrics: metrics, palette: palette)
                             .flash(id: flashIds[session.id])
                             .onTapGesture { onClickSession(session) }
+                            .contextMenu {
+                                Button("Ignore") {
+                                    store.ignore(sessionId: session.id)
+                                }
+                            }
                     }
                 }
                 .padding(0)
             }
         }
         .onReceive(ticker) { now = $0 }
-        .onChange(of: store.orderedSessions) { _, new in
+        .onChange(of: store.visibleSessions) { _, new in
             flashIds = flashCoordinator.update(sessions: new)
         }
         .onAppear {
-            flashIds = flashCoordinator.update(sessions: store.orderedSessions)
+            flashIds = flashCoordinator.update(sessions: store.visibleSessions)
         }
     }
 

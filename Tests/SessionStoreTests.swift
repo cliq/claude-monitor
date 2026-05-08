@@ -114,6 +114,53 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(captured[0].sessionId, "s")
     }
 
+    func test_ignoreAddsToIgnoredSet() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s1"))
+        store.ignore(sessionId: "s1")
+        XCTAssertEqual(store.ignoredSessionIds, ["s1"])
+    }
+
+    func test_unignoreRemovesFromIgnoredSet() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s1"))
+        store.ignore(sessionId: "s1")
+        store.unignore(sessionId: "s1")
+        XCTAssertEqual(store.ignoredSessionIds, [])
+    }
+
+    func test_visibleAndIgnoredPartitionOrderedSessions() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "a", tty: "/dev/ttys001", cwd: "/p/alpha"))
+        store.apply(event(.sessionStart, session: "b", tty: "/dev/ttys002", cwd: "/p/beta"))
+        store.apply(event(.sessionStart, session: "c", tty: "/dev/ttys003", cwd: "/p/gamma"))
+        store.ignore(sessionId: "b")
+
+        XCTAssertEqual(store.visibleSessions.map(\.id), ["a", "c"])
+        XCTAssertEqual(store.ignoredSessions.map(\.id), ["b"])
+    }
+
+    func test_sessionEndClearsIgnoredEntry() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s1"))
+        store.ignore(sessionId: "s1")
+        XCTAssertEqual(store.ignoredSessionIds, ["s1"])
+
+        store.apply(event(.sessionEnd, session: "s1"))
+        XCTAssertEqual(store.orderedSessions.count, 0)
+        XCTAssertEqual(store.ignoredSessionIds, [], "finishing a session must clear its ignored flag")
+    }
+
+    func test_markFinishedClearsIgnoredEntry() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s1"))
+        store.ignore(sessionId: "s1")
+
+        store.markFinished(sessionId: "s1")
+        XCTAssertEqual(store.orderedSessions.count, 0)
+        XCTAssertEqual(store.ignoredSessionIds, [])
+    }
+
     func test_applyForwardsEventEvenWhenSessionIsRemoved() {
         var captured: [HookEvent] = []
         let store = SessionStore(clock: FakeClock(), onEventApplied: { captured.append($0) })

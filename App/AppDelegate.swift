@@ -30,16 +30,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 1b. Build the push notifier and wire it into the session store so every
         //     applied event is considered for a Prowl push (gated by master toggle).
         let prowlClient = ProwlClient()
+
+        // Two-step wiring so the notifier can read the store's ignore set.
+        // Both objects need each other; the store is created first as nil-safe
+        // weak reference inside the notifier's closure.
+        var storeRef: SessionStore?
         pushNotifier = PushNotifier(
             preferences: preferences,
             keychainGetter: { try? KeychainStore.prowl.get() },
-            prowlSend: prowlClient.send
+            prowlSend: prowlClient.send,
+            isIgnored: { sessionId in
+                storeRef?.ignoredSessionIds.contains(sessionId) ?? false
+            }
         )
 
         let notifier = pushNotifier!
         store = SessionStore(onEventApplied: { [weak notifier] event in
             notifier?.handle(event: event)
         })
+        storeRef = store
 
         // 2. Start the HTTP server and publish its port.
         server = EventServer { [weak self] event in
