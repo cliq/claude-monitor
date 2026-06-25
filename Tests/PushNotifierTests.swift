@@ -20,10 +20,12 @@ final class PushNotifierTests: XCTestCase {
     private func event(_ hook: HookName,
                        cwd: String = "/Users/me/proj",
                        notificationType: String? = nil,
-                       message: String? = nil) -> HookEvent {
+                       message: String? = nil,
+                       backgroundTasksActive: Int? = nil) -> HookEvent {
         HookEvent(hook: hook, sessionId: "s", tty: "/dev/ttys000", pid: 1, cwd: cwd,
                   ts: 0, promptPreview: nil, toolName: nil,
-                  notificationType: notificationType, message: message)
+                  notificationType: notificationType, message: message,
+                  backgroundTasksActive: backgroundTasksActive)
     }
 
     func test_doesNothingWhenMasterToggleOff() async {
@@ -129,6 +131,20 @@ final class PushNotifierTests: XCTestCase {
         keychain.value = "k"
         await notifier.handleAndAwait(event(.stop, cwd: ""))
         XCTAssertEqual(prowl.calls[0].event, "Done")
+    }
+
+    func test_stopWithActiveBackgroundTasksDoesNotPush() async {
+        preferences.prowlEnabled = true
+        keychain.value = "k"
+        await notifier.handleAndAwait(event(.stop, backgroundTasksActive: 2))
+        XCTAssertEqual(prowl.calls.count, 0, "should not push while background tasks run")
+    }
+
+    func test_stopWithZeroBackgroundTasksStillPushes() async {
+        preferences.prowlEnabled = true
+        keychain.value = "k"
+        await notifier.handleAndAwait(event(.stop, backgroundTasksActive: 0))
+        XCTAssertEqual(prowl.calls.count, 1)
     }
 }
 

@@ -30,6 +30,7 @@ final class PushNotifier {
     func handle(event: HookEvent) -> Task<Void, Never> {
         guard preferences.prowlEnabled else { return Task {} }
         guard event.hook == .stop || event.hook == .notification else { return Task {} }
+        if event.hook == .stop, (event.backgroundTasksActive ?? 0) > 0 { return Task {} }
         guard !isIgnored(event.sessionId) else { return Task {} }
         guard let key = keychainGetter(), !key.isEmpty else {
             NSLog("PushNotifier: skipping push — Prowl API key is not configured")
