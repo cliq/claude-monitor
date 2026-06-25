@@ -151,15 +151,17 @@ final class MenuBarController: NSObject {
         let needsYou = sessions.filter { $0.state == .needsYou }.count
         let anyWaiting = sessions.contains { $0.state == .waiting }
         let anyWorking = sessions.contains { $0.state == .working }
+        let anyBackgroundWorking = sessions.contains { $0.state == .backgroundWorking }
 
         // Pick the "winning" aggregate state (priority: needsYou > waiting >
-        // working > idle) and reuse the shared per-state palette so the dot in
-        // the status item matches the per-session dots in menu mode.
+        // working > backgroundWorking > idle) and reuse the shared per-state
+        // palette so the dot in the status item matches the per-session dots in menu mode.
         let winning: SessionState
-        if needsYou > 0    { winning = .needsYou }
-        else if anyWaiting { winning = .waiting }
-        else if anyWorking { winning = .working }
-        else               { winning = .finished } // idle → gray
+        if needsYou > 0           { winning = .needsYou }
+        else if anyWaiting        { winning = .waiting }
+        else if anyWorking        { winning = .working }
+        else if anyBackgroundWorking { winning = .backgroundWorking }
+        else                      { winning = .finished } // idle → gray
         let color = SessionStateColor.nsColor(for: winning)
 
         let size = CGSize(width: 16, height: 16)

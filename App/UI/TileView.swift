@@ -24,7 +24,7 @@ struct TileView: View {
                         .fill(palette.textColor)
                         .frame(width: metrics.dotSize, height: metrics.dotSize)
                 }
-                Text("\(session.state.displayLabel) · \(elapsed)")
+                Text(statusLine)
                     .font(.system(size: metrics.statusPointSize, weight: .regular).monospacedDigit())
                     .opacity(0.95)
                 if let preview = session.lastPromptPreview {
@@ -48,5 +48,14 @@ struct TileView: View {
     private var elapsed: String {
         let secs = max(0, Int(now.timeIntervalSince(session.enteredStateAt)))
         return String(format: "%d:%02d", secs / 60, secs % 60)
+    }
+
+    private var statusLine: String {
+        guard session.state == .backgroundWorking else {
+            return "\(session.state.displayLabel) · \(elapsed)"
+        }
+        let n = session.backgroundTaskCount
+        let unit = n == 1 ? "task" : "tasks"
+        return "\(session.state.displayLabel) · \(n) \(unit) · \(elapsed)"
     }
 }
