@@ -41,4 +41,8 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(StateMachine.transition(from: nil, for: .notification), .needsYou)
         XCTAssertEqual(StateMachine.transition(from: nil, for: .sessionEnd), .finished)
     }
+
+    func test_backgroundWorkingLabelIsWorking() {
+        XCTAssertEqual(SessionState.backgroundWorking.displayLabel, "Working")
+    }
 }

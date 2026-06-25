@@ -21,10 +21,11 @@ struct Palette: Equatable {
 
     func background(for state: SessionState) -> RGB {
         switch state {
-        case .working:  return working
-        case .waiting:  return waiting
-        case .needsYou: return needsYou
-        case .finished: return finished
+        case .working:           return working
+        case .backgroundWorking: return working.dimmed()
+        case .waiting:           return waiting
+        case .needsYou:          return needsYou
+        case .finished:          return finished
         }
     }
 

@@ -34,3 +34,11 @@ struct RGB: Equatable {
         Color(red: red, green: green, blue: blue).opacity(opacity)
     }
 }
+
+extension RGB {
+    /// A darker variant used for the `backgroundWorking` state so it reads as
+    /// "working, but in the background". Scales each channel toward black.
+    func dimmed(by factor: Double = 0.62) -> RGB {
+        RGB(red: red * factor, green: green * factor, blue: blue * factor, opacity: opacity)
+    }
+}

@@ -12,8 +12,9 @@ enum SessionStateColor {
         switch state {
         case .needsYou: return NSColor(srgbRed: 0xEF/255, green: 0x44/255, blue: 0x44/255, alpha: 1)
         case .waiting:  return NSColor(srgbRed: 0xF5/255, green: 0x9E/255, blue: 0x0B/255, alpha: 1)
-        case .working:  return NSColor(srgbRed: 0x3B/255, green: 0x82/255, blue: 0xF6/255, alpha: 1)
-        case .finished: return NSColor(srgbRed: 0x6B/255, green: 0x72/255, blue: 0x80/255, alpha: 1)
+        case .working:           return NSColor(srgbRed: 0x3B/255, green: 0x82/255, blue: 0xF6/255, alpha: 1)
+        case .backgroundWorking: return NSColor(srgbRed: 0x24/255, green: 0x50/255, blue: 0x8F/255, alpha: 1)
+        case .finished:          return NSColor(srgbRed: 0x6B/255, green: 0x72/255, blue: 0x80/255, alpha: 1)
         }
     }
 }

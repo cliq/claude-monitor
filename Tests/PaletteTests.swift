@@ -78,6 +78,18 @@ final class PaletteTests: XCTestCase {
         XCTAssertEqual(p.background(for: .finished), p.finished)
     }
 
+    func test_backgroundWorkingIsDimmedWorking() {
+        let p = Palette.resolve(.vibrant)
+        XCTAssertEqual(p.background(for: .backgroundWorking), p.working.dimmed())
+    }
+
+    func test_dimmedDarkensChannels() {
+        let dimmed = RGB(0x3B82F6).dimmed(by: 0.5)
+        XCTAssertEqual(dimmed.red,   Double(0x3B) / 255.0 * 0.5, accuracy: 1e-9)
+        XCTAssertEqual(dimmed.green, Double(0x82) / 255.0 * 0.5, accuracy: 1e-9)
+        XCTAssertEqual(dimmed.blue,  Double(0xF6) / 255.0 * 0.5, accuracy: 1e-9)
+    }
+
     // MARK: Exhaustiveness
 
     func test_everyPaletteIDResolves() {

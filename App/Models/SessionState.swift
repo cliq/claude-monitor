@@ -2,6 +2,7 @@ import Foundation
 
 enum SessionState: String, Codable, Equatable, CaseIterable {
     case working
+    case backgroundWorking
     case waiting
     case needsYou
     case finished
@@ -10,8 +11,9 @@ enum SessionState: String, Codable, Equatable, CaseIterable {
 extension SessionState {
     var displayLabel: String {
         switch self {
-        case .working:  return "Working"
-        case .waiting:  return "Waiting"
+        case .working:           return "Working"
+        case .backgroundWorking: return "Working"
+        case .waiting:           return "Waiting"
         case .needsYou: return "Needs you"
         case .finished: return "Finished"
         }
