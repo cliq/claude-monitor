@@ -24,6 +24,12 @@ Detect that a session is still working in the background and represent it as a
 distinct state that does **not** fire an idle push. Only notify when the session
 is *genuinely* idle (main agent stopped **and** no background tasks remain).
 
+A second, related symptom: when a background task finishes, Claude injects a
+synthetic `<task-notification>…<task-id>…</task-id>…` **user** message. `hook.sh`
+forwards it as `prompt_preview`, so the tile's preview text is overwritten with
+that raw XML (visible even on foreground `working` tiles). This change also
+suppresses that.
+
 Non-goals: tracking individual background tasks/agents, correlating subagents to
 parents, surfacing per-task progress. Out of scope for this change.
 
@@ -106,6 +112,13 @@ No `HookInstaller.currentVersion` bump: the managed `settings.json` command
 string is unchanged, and `HookScriptDeployer.deploy` overwrites
 `~/.claude-monitor/hook.sh` from the bundle on every launch.
 
+Additionally, suppress the synthetic-prompt preview: if the incoming `prompt`
+starts with `<task-notification>`, **omit** `prompt_preview` from the POST
+entirely. `SessionStore.apply` already only overwrites `lastPromptPreview` when
+`event.promptPreview != nil`, so omitting it preserves the last *human* prompt on
+the tile. (The `UserPromptSubmit` → `working` transition still happens — the
+agent really is working on the result; only the preview text is preserved.)
+
 ### `HookEvent` (`App/Models/HookEvent.swift`)
 
 Add `let backgroundTasksActive: Int?` with coding key `background_tasks_active`.
@@ -172,6 +185,8 @@ The genuinely-idle `Stop` (empty `background_tasks`) still pushes as today. The
   with zero → send; `.notification` → send (unchanged).
 - **`hook.sh`**: a small parse check (feed a JSON payload with a `running` and a
   `completed` task → `background_tasks_active == 1`; empty/missing array → 0).
+  Also: a `UserPromptSubmit` payload whose `prompt` starts with
+  `<task-notification>` → no `prompt_preview` in output; a normal prompt → present.
 - **`SessionStore`**: applying a background `Stop` sets state + count;
   a later zero-task `Stop` clears to `waiting` with count 0.
 
