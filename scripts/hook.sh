@@ -50,7 +50,7 @@ out = {
     "ts":              int(os.environ.get("TS_VAL", "0")),
 }
 preview = src.get("prompt") or src.get("user_prompt")
-if isinstance(preview, str):
+if isinstance(preview, str) and not preview.lstrip().startswith("<task-notification>"):
     out["prompt_preview"] = preview[:120]
 tool = src.get("tool_name")
 if isinstance(tool, str):
@@ -61,6 +61,13 @@ if isinstance(notif_type, str):
 msg = src.get("message")
 if isinstance(msg, str):
     out["message"] = msg
+bg = src.get("background_tasks")
+if isinstance(bg, list):
+    terminal = {"completed", "failed", "cancelled"}
+    out["background_tasks_active"] = sum(
+        1 for t in bg
+        if isinstance(t, dict) and str(t.get("status", "")).lower() not in terminal
+    )
 print(json.dumps(out))
 PY
 )"
