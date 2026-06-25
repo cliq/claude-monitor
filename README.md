@@ -6,11 +6,12 @@
 
 A native macOS menu-bar app that shows the live state of every Claude Code CLI session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
 
-Each tile represents one Claude Code session and is one of four states:
+Each tile represents one Claude Code session and is one of five states:
 
 | State | Color | Meaning |
 |---|---|---|
 | Working | blue | Claude is doing work (between `UserPromptSubmit` and `Stop`) |
+| Working (background) | dimmed blue | Claude's turn ended but background tasks are still running — the tile shows the count (e.g. `Working · 2 tasks`) and no "waiting" push is sent until they finish |
 | Waiting | amber | Claude finished — ball is in your court |
 | Needs you | red | Claude is blocked on a permission prompt |
 | Finished | grey | Session ended; tile auto-removes shortly after |
