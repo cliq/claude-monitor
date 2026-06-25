@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting terminal tab. Terminal.app and iTerm2 are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
-The full design lives at `docs/superpowers/specs/2026-04-23-claude-monitor-design.md` and is the source of truth for product behavior; defer to it when behavior is ambiguous.
-
 ## Build / test
 
 The Xcode project is **generated** — `ClaudeMonitor.xcodeproj/` and `App/Info.plist` are gitignored. Run `make gen` (wraps `xcodegen`) before opening in Xcode or running any `xcodebuild` command after pulling or editing `project.yml`.
@@ -102,5 +100,5 @@ The dashboard uses a single 1 Hz `Timer.publish` in `DashboardView` to drive all
 
 - `scripts/hook.sh` is a **build resource** (see `project.yml`) for both the app and the test bundle — `HookScriptDeployer` finds it via `Bundle.main` first, then falls back to the test bundle. Don't inline its contents into Swift; edit the file.
 - Set `CLAUDE_MONITOR_SKIP_ONBOARDING=1` in a scheme's environment (or `launchEnvironment`) to skip the first-run sheet in UI tests.
-- Hardened runtime is **off** by default (fast local iteration; no TCC prompt on every fresh build). The release workflow (`.github/workflows/release.yml`) overrides `ENABLE_HARDENED_RUNTIME=YES` for notarization. Apple-event access to Terminal.app is plumbed through `App/ClaudeMonitor.entitlements` (`com.apple.security.automation.apple-events`) so the hardened-runtime build still works; new entitlements must be added there. Signing identity is configured via `Configuration/LocalSigning.xcconfig` (gitignored) — see `docs/notarization.md`.
+- Hardened runtime is **off** by default (fast local iteration; no TCC prompt on every fresh build). The release workflow (`.github/workflows/release.yml`) overrides `ENABLE_HARDENED_RUNTIME=YES` for notarization. Apple-event access to Terminal.app is plumbed through `App/ClaudeMonitor.entitlements` (`com.apple.security.automation.apple-events`) so the hardened-runtime build still works; new entitlements must be added there. Signing identity is configured via `Configuration/LocalSigning.xcconfig` (gitignored).
 - Fixture JSON for `HookInstallerTests` lives at `Tests/Fixtures/` and is bundled into the test target.
