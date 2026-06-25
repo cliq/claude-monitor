@@ -45,4 +45,29 @@ final class StateMachineTests: XCTestCase {
     func test_backgroundWorkingLabelIsWorking() {
         XCTAssertEqual(SessionState.backgroundWorking.displayLabel, "Working")
     }
+
+    func test_stopWithActiveBackgroundTasksGoesToBackgroundWorking() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .working, for: .stop, backgroundTasksActive: 2),
+            .backgroundWorking)
+    }
+
+    func test_stopWithZeroBackgroundTasksGoesToWaiting() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .working, for: .stop, backgroundTasksActive: 0),
+            .waiting)
+        XCTAssertEqual(StateMachine.transition(from: .working, for: .stop), .waiting) // default arg
+    }
+
+    func test_backgroundWorkingGoesToWorkingOnUserPromptSubmit() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .backgroundWorking, for: .userPromptSubmit),
+            .working)
+    }
+
+    func test_backgroundWorkingGoesToFinishedOnSessionEnd() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .backgroundWorking, for: .sessionEnd),
+            .finished)
+    }
 }
