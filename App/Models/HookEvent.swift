@@ -19,6 +19,24 @@ struct HookEvent: Codable, Equatable {
     let toolName: String?
     let notificationType: String?
     let message: String?
+    let backgroundTasksActive: Int?
+
+    init(hook: HookName, sessionId: String, tty: String, pid: Int32, cwd: String,
+         ts: Int, promptPreview: String?, toolName: String?,
+         notificationType: String?, message: String?,
+         backgroundTasksActive: Int? = nil) {
+        self.hook = hook
+        self.sessionId = sessionId
+        self.tty = tty
+        self.pid = pid
+        self.cwd = cwd
+        self.ts = ts
+        self.promptPreview = promptPreview
+        self.toolName = toolName
+        self.notificationType = notificationType
+        self.message = message
+        self.backgroundTasksActive = backgroundTasksActive
+    }
 
     enum CodingKeys: String, CodingKey {
         case hook
@@ -31,5 +49,6 @@ struct HookEvent: Codable, Equatable {
         case toolName         = "tool_name"
         case notificationType = "notification_type"
         case message
+        case backgroundTasksActive = "background_tasks_active"
     }
 }

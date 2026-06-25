@@ -73,4 +73,20 @@ final class HookEventTests: XCTestCase {
         XCTAssertNil(event.notificationType)
         XCTAssertNil(event.message)
     }
+
+    func test_decodesStopWithBackgroundTasksActive() throws {
+        let json = """
+        {"hook":"Stop","session_id":"s","tty":"/","pid":1,"cwd":"/","ts":1,"background_tasks_active":2}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertEqual(event.backgroundTasksActive, 2)
+    }
+
+    func test_decodesStopWithoutBackgroundTasksActiveIsNil() throws {
+        let json = """
+        {"hook":"Stop","session_id":"s","tty":"/","pid":1,"cwd":"/","ts":1}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertNil(event.backgroundTasksActive)
+    }
 }
