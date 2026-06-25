@@ -27,6 +27,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // 1a. Always (re)deploy the bundled hook.sh on launch so an app update
+        //     refreshes ~/.claude-monitor/hook.sh. `deploy()` overwrites and is
+        //     idempotent. Onboarding and Settings also call it, but a user who
+        //     already onboarded on an older version would otherwise keep the stale
+        //     hook forever and never receive hook.sh changes. Failure must not
+        //     block launch — a hook deploy problem only degrades monitoring.
+        do {
+            try HookScriptDeployer.deploy()
+        } catch {
+            NSLog("HookScriptDeployer: launch deploy failed — \(error)")
+        }
+
         // 1b. Build the push notifier and wire it into the session store so every
         //     applied event is considered for a Prowl push (gated by master toggle).
         let prowlClient = ProwlClient()
