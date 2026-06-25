@@ -18,7 +18,7 @@ final class SessionStateColorTests: XCTestCase {
     }
 
     func testBackgroundWorkingHex() {
-        XCTAssertEqual(SessionStateColor.nsColor(for: .backgroundWorking).hexString, "#24508F")
+        XCTAssertEqual(SessionStateColor.nsColor(for: .backgroundWorking).hexString, "#255199")
     }
 }
 
