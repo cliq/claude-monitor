@@ -14,7 +14,7 @@
 - `scripts/hook.sh` is a **build resource**, not inlined into Swift — edit the file. It must always `exit 0`. `HookScriptDeployer` overwrites `~/.claude-monitor/hook.sh` on every launch, so no installer version bump and **no `HookInstaller` change** is needed (we reuse the already-installed `Stop` hook).
 - No new source files are created (only edits to existing files + new tests in existing files), so `make gen` is NOT required. If you add a brand-new file for any reason, run `make gen` first.
 - New state raw value: `backgroundWorking`. Tile label text: `Working` (count rendered separately as `· N task`/`· N tasks`).
-- Dimmed-blue color is derived per-palette as `working.dimmed()` (a darker variant), so the default Vibrant palette yields a dimmed blue and every palette stays self-consistent. The separate menu-bar dot color (`SessionStateColor`) is a fixed dimmed blue `#24508F`.
+- Dimmed-blue color is derived per-palette as `working.dimmed()` (a darker variant), so the default Vibrant palette yields a dimmed blue and every palette stays self-consistent. The separate menu-bar dot color (`SessionStateColor`) is a fixed dimmed blue `#255199` (= Vibrant `working.dimmed(0.62)`).
 - Each task must end with a green build (`SessionState` is used in exhaustive `switch`es, so the case + all switches land together in Task 3).
 - Test run commands:
   - All tests: `make test`
@@ -261,7 +261,7 @@ This task adds the enum case **and** every exhaustive `switch` that consumes it 
 - Test: `Tests/StateMachineTests.swift`, `Tests/PaletteTests.swift`, `Tests/SessionStateColorTests.swift`
 
 **Interfaces:**
-- Produces: `SessionState.backgroundWorking` (rawValue `"backgroundWorking"`), `displayLabel == "Working"`; `RGB.dimmed(by:) -> RGB`; `Palette.background(for: .backgroundWorking) == working.dimmed()`; `SessionStateColor.nsColor(for: .backgroundWorking) == #24508F`.
+- Produces: `SessionState.backgroundWorking` (rawValue `"backgroundWorking"`), `displayLabel == "Working"`; `RGB.dimmed(by:) -> RGB`; `Palette.background(for: .backgroundWorking) == working.dimmed()`; `SessionStateColor.nsColor(for: .backgroundWorking) == #255199`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -299,7 +299,7 @@ and add:
 
 ```swift
     func testBackgroundWorkingHex() {
-        XCTAssertEqual(SessionStateColor.nsColor(for: .backgroundWorking).hexString, "#24508F")
+        XCTAssertEqual(SessionStateColor.nsColor(for: .backgroundWorking).hexString, "#255199")
     }
 ```
 
