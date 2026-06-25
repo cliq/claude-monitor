@@ -32,7 +32,9 @@ final class SessionStore: ObservableObject {
         if let idx = existing {
             var session = orderedSessions[idx]
             let previousState = session.state
-            let newState = StateMachine.transition(from: previousState, for: event.hook)
+            let activeBackground = event.backgroundTasksActive ?? 0
+            let newState = StateMachine.transition(from: previousState, for: event.hook,
+                                                   backgroundTasksActive: activeBackground)
 
             if newState == .finished {
                 orderedSessions.remove(at: idx)
@@ -50,11 +52,14 @@ final class SessionStore: ObservableObject {
             if let preview = event.promptPreview {
                 session.lastPromptPreview = preview
             }
+            session.backgroundTaskCount = (newState == .backgroundWorking) ? activeBackground : 0
             orderedSessions[idx] = session
         } else {
-            let newState = StateMachine.transition(from: nil, for: event.hook)
+            let activeBackground = event.backgroundTasksActive ?? 0
+            let newState = StateMachine.transition(from: nil, for: event.hook,
+                                                   backgroundTasksActive: activeBackground)
             if newState == .finished { return }
-            let session = Session(
+            var session = Session(
                 id: event.sessionId,
                 cwd: event.cwd,
                 tty: event.tty,
@@ -63,6 +68,7 @@ final class SessionStore: ObservableObject {
                 enteredStateAt: clock.now(),
                 lastPromptPreview: event.promptPreview
             )
+            session.backgroundTaskCount = (newState == .backgroundWorking) ? activeBackground : 0
             orderedSessions.append(session)
         }
     }
