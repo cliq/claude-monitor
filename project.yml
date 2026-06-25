@@ -30,6 +30,12 @@ targets:
       path: App/Info.plist
       properties:
         LSUIElement: false
+        # Track the build-setting versions so a MARKETING_VERSION/CURRENT_PROJECT_VERSION
+        # bump actually reaches the bundle (the static Info.plist otherwise pins these to
+        # literals and the app keeps reporting 1.0/1). HookMaintenance also keys its
+        # "refresh hooks on update" check on CFBundleVersion, so this must be live.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSAppleEventsUsageDescription: "Claude Monitor uses Apple events to focus the Terminal.app or iTerm2 tab of a selected Claude Code session."
         NSHumanReadableCopyright: "Copyright © 2026 Cliq Consulting LLC. All rights reserved."
         # actool emits `AppIcon.icns` into Contents/Resources but its generated partial

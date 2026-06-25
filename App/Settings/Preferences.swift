@@ -41,6 +41,18 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(prowlOfflineHookEnabled, forKey: Self.prowlOfflineKey) }
     }
 
+    /// The app build (`CFBundleVersion`) we last refreshed the on-disk hooks for.
+    /// Drives the "refresh hooks once per app update" check in `AppDelegate`.
+    @Published var lastHookRefreshBuild: String? {
+        didSet {
+            if let build = lastHookRefreshBuild {
+                defaults.set(build, forKey: Self.lastHookRefreshBuildKey)
+            } else {
+                defaults.removeObject(forKey: Self.lastHookRefreshBuildKey)
+            }
+        }
+    }
+
     /// Last known dashboard window frame (screen coordinates). We manage this manually
     /// instead of relying on `setFrameAutosaveName`, because borderless+floating windows
     /// don't persist reliably through AppKit's built-in autosave.
@@ -68,6 +80,7 @@ final class Preferences: ObservableObject {
     private static let showWindowKey        = "showDashboardWindow"
     private static let prowlEnabledKey      = "prowlEnabled"
     private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
+    private static let lastHookRefreshBuildKey = "lastHookRefreshBuild"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -92,5 +105,6 @@ final class Preferences: ObservableObject {
 
         self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
         self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)
+        self.lastHookRefreshBuild = defaults.string(forKey: Self.lastHookRefreshBuildKey)
     }
 }

@@ -27,16 +27,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // 1a. Always (re)deploy the bundled hook.sh on launch so an app update
-        //     refreshes ~/.claude-monitor/hook.sh. `deploy()` overwrites and is
-        //     idempotent. Onboarding and Settings also call it, but a user who
-        //     already onboarded on an older version would otherwise keep the stale
-        //     hook forever and never receive hook.sh changes. Failure must not
-        //     block launch — a hook deploy problem only degrades monitoring.
-        do {
-            try HookScriptDeployer.deploy()
-        } catch {
-            NSLog("HookScriptDeployer: launch deploy failed — \(error)")
+        // 1a. On app update, refresh the on-disk hook integration so users who
+        //     already onboarded pick up new hook behavior without a manual
+        //     reinstall. Gated on the build number so we only rewrite user config
+        //     when the app actually changed: redeploy hook.sh, then reinstall any
+        //     OUTDATED already-managed config dirs (never auto-opting in new ones).
+        //     All failures only log — a hook problem must not block launch.
+        let build = HookMaintenance.currentBuild
+        if HookMaintenance.needsRefresh(currentBuild: build, lastBuild: preferences.lastHookRefreshBuild) {
+            do {
+                try HookScriptDeployer.deploy()
+            } catch {
+                NSLog("HookScriptDeployer: launch deploy failed — \(error)")
+            }
+
+            let managedDirs = preferences.managedConfigDirectoryPaths.map { URL(fileURLWithPath: $0) }
+            var refreshed = HookMaintenance.reinstallOutdated(
+                managedDirs: managedDirs,
+                inspect: { try HookInstaller.inspect(configDir: $0).status },
+                install: { try HookInstaller.install(configDir: $0) }
+            ).count
+            if preferences.prowlOfflineHookEnabled {
+                refreshed += HookMaintenance.reinstallOutdated(
+                    managedDirs: managedDirs,
+                    inspect: { try HookInstaller.inspectOfflineHook(configDir: $0).status },
+                    install: { try HookInstaller.installOfflineHook(configDir: $0) }
+                ).count
+            }
+            if refreshed > 0 {
+                NSLog("HookMaintenance: refreshed \(refreshed) outdated managed hook entr(ies) after update to build \(build)")
+            }
+            preferences.lastHookRefreshBuild = build
         }
 
         // 1b. Build the push notifier and wire it into the session store so every
