@@ -70,4 +70,43 @@ final class StateMachineTests: XCTestCase {
             StateMachine.transition(from: .backgroundWorking, for: .sessionEnd),
             .finished)
     }
+
+    func test_waitingForInputNotificationWhileWorkingStaysWorking() {
+        // Idle "waiting for your input" ping while the agent is parked on a
+        // background subagent is a false alarm — don't flip to needsYou.
+        XCTAssertEqual(
+            StateMachine.transition(from: .working, for: .notification,
+                                    notificationMessage: "Claude is waiting for your input"),
+            .working)
+    }
+
+    func test_waitingForInputNotificationWhileBackgroundWorkingStaysBackgroundWorking() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .backgroundWorking, for: .notification,
+                                    notificationMessage: "Claude is waiting for your input"),
+            .backgroundWorking)
+    }
+
+    func test_permissionNotificationWhileWorkingGoesToNeedsYou() {
+        XCTAssertEqual(
+            StateMachine.transition(from: .working, for: .notification,
+                                    notificationMessage: "Claude needs your permission to use Bash"),
+            .needsYou)
+    }
+
+    func test_waitingForInputNotificationWhileWaitingGoesToNeedsYou() {
+        // Turn already finished and idle — the user genuinely needs to act.
+        XCTAssertEqual(
+            StateMachine.transition(from: .waiting, for: .notification,
+                                    notificationMessage: "Claude is waiting for your input"),
+            .needsYou)
+    }
+
+    func test_notificationWithoutMessageGoesToNeedsYou() {
+        // Unclassifiable notification: keep the conservative needsYou behavior.
+        XCTAssertEqual(
+            StateMachine.transition(from: .working, for: .notification,
+                                    notificationMessage: nil),
+            .needsYou)
+    }
 }

@@ -21,8 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowVisibilityCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 1. Single instance guard.
-        if case .alreadyRunning = SingleInstanceGuard.acquire(at: SingleInstanceGuard.defaultLocation) {
+        // 1. Single instance guard. Skipped in the test host so a running
+        //    production instance can't make the unit-test app self-terminate.
+        if ProcessInfo.processInfo.environment["CLAUDE_MONITOR_SKIP_SINGLE_INSTANCE"] != "1",
+           case .alreadyRunning = SingleInstanceGuard.acquire(at: SingleInstanceGuard.defaultLocation) {
             NSApp.terminate(nil)
             return
         }

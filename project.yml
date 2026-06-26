@@ -13,6 +13,23 @@ settings:
     # Default off for fast local iteration (no TCC prompts when driving Terminal).
     # The release workflow overrides this to YES for notarization.
     ENABLE_HARDENED_RUNTIME: NO
+schemes:
+  ClaudeMonitor:
+    build:
+      targets:
+        ClaudeMonitor: all
+        ClaudeMonitorTests: [test]
+        ClaudeMonitorIntegrationTests: [test]
+        ClaudeMonitorUITests: [test]
+    test:
+      targets:
+        - ClaudeMonitorTests
+        - ClaudeMonitorIntegrationTests
+        - ClaudeMonitorUITests
+      # Let the hosted test app run even when a production instance holds the
+      # single-instance lock — otherwise it self-terminates before tests connect.
+      environmentVariables:
+        CLAUDE_MONITOR_SKIP_SINGLE_INSTANCE: "1"
 targets:
   ClaudeMonitor:
     type: application
