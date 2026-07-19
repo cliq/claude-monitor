@@ -59,7 +59,7 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
 
         if preferences.showDashboardWindow {
-            let openItem = NSMenuItem(title: "Open Dashboard",
+            let openItem = NSMenuItem(title: "Bring Dashboard to Front",
                                       action: #selector(openDashboard),
                                       keyEquivalent: "d")
             openItem.target = self

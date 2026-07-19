@@ -22,6 +22,11 @@ final class UsagePanelWindow {
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = true
+        // Utility panels hide whenever the app deactivates; the panel should
+        // stay on screen like the dashboard for as long as the menu toggle is
+        // on, across app switches, Spaces, and full-screen apps.
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentViewController = NSHostingController(rootView: UsagePanelView(poller: poller))
         panel.setFrameAutosaveName("UsagePanelWindow")
         self.window = panel
