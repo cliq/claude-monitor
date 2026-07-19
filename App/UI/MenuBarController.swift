@@ -10,7 +10,6 @@ final class MenuBarController: NSObject {
     private let preferences: Preferences
     private let onSessionClick: (Session) -> Void
     private let onOpenDashboard: () -> Void
-    private let onOpenUsage: () -> Void
     private let onOpenSettings: () -> Void
     private var cancellables: Set<AnyCancellable> = []
 
@@ -18,13 +17,11 @@ final class MenuBarController: NSObject {
          preferences: Preferences,
          onSessionClick: @escaping (Session) -> Void,
          onOpenDashboard: @escaping () -> Void,
-         onOpenUsage: @escaping () -> Void,
          onOpenSettings: @escaping () -> Void) {
         self.store = store
         self.preferences = preferences
         self.onSessionClick = onSessionClick
         self.onOpenDashboard = onOpenDashboard
-        self.onOpenUsage = onOpenUsage
         self.onOpenSettings = onOpenSettings
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -70,11 +67,12 @@ final class MenuBarController: NSObject {
         }
 
         if preferences.usageMonitorEnabled {
-            let usageItem = NSMenuItem(title: "Open Usage Panel",
-                                       action: #selector(openUsage),
-                                       keyEquivalent: "u")
-            usageItem.target = self
-            menu.addItem(usageItem)
+            let usageToggle = NSMenuItem(title: "Show Usage Panel",
+                                         action: #selector(toggleUsagePanel),
+                                         keyEquivalent: "u")
+            usageToggle.target = self
+            usageToggle.state = preferences.showUsagePanel ? .on : .off
+            menu.addItem(usageToggle)
         }
 
         let toggle = NSMenuItem(title: "Show Dashboard Window",
@@ -187,7 +185,10 @@ final class MenuBarController: NSObject {
     }
 
     @objc private func openDashboard()         { onOpenDashboard() }
-    @objc private func openUsage()             { onOpenUsage() }
+
+    @objc private func toggleUsagePanel() {
+        preferences.showUsagePanel.toggle()
+    }
     @objc private func openSettings()          { onOpenSettings() }
 
     @objc private func toggleDashboardWindow() {

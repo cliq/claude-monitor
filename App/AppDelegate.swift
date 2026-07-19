@@ -123,18 +123,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preferences: preferences,
             onSessionClick: { [weak self] session in self?.handleClick(on: session) },
             onOpenDashboard: { [weak self] in self?.dashboard.showAndBringToFront() },
-            onOpenUsage:     { [weak self] in self?.openUsagePanel() },
             onOpenSettings:  { [weak self] in self?.openSettings() }
         )
 
         // 5a. Usage-limit monitoring + LAN bridge for external displays.
         //     Re-applied whenever any of the usage preferences change.
         applyUsagePreferences()
-        Publishers.Merge3(preferences.$usageMonitorEnabled.dropFirst().map { _ in () },
+        Publishers.Merge4(preferences.$usageMonitorEnabled.dropFirst().map { _ in () },
                           preferences.$usageBridgeEnabled.dropFirst().map { _ in () },
-                          preferences.$usageBridgePort.dropFirst().map { _ in () })
+                          preferences.$usageBridgePort.dropFirst().map { _ in () },
+                          preferences.$showUsagePanel.dropFirst().map { _ in () })
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.applyUsagePreferences() }
+            .store(in: &usageCancellables)
+
+        // Account edits (rename/disable/reorder) only need a repoll, not a
+        // bridge restart. Debounced so typing a name doesn't spam the API.
+        Publishers.Merge3(preferences.$disabledUsageAccountDirs.dropFirst().map { _ in () },
+                          preferences.$usageAccountNames.dropFirst().map { _ in () },
+                          preferences.$usageAccountOrder.dropFirst().map { _ in () })
+            .debounce(for: .milliseconds(750), scheduler: RunLoop.main)
+            .sink { [weak self] in self?.repollUsageAccounts() }
             .store(in: &usageCancellables)
 
         // 6. First-run onboarding.
@@ -171,12 +180,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func applyUsagePreferencesOnMain() {
         if preferences.usageMonitorEnabled {
-            if usagePoller == nil { usagePoller = UsagePoller() }
+            if usagePoller == nil {
+                let prefs = preferences
+                usagePoller = UsagePoller(accountsProvider: {
+                    UsageAccountConfig.resolve(discovered: UsageAccountConfig.discover(),
+                                               order: prefs.usageAccountOrder,
+                                               disabledDirs: prefs.disabledUsageAccountDirs,
+                                               customNames: prefs.usageAccountNames)
+                })
+            }
             usagePoller?.start()
         } else {
             usagePoller?.stop()
-            usagePanelWindow?.hide()
         }
+        syncUsagePanelVisibility()
 
         let desiredPort = UInt16(clamping: preferences.usageBridgePort)
         let wantBridge = preferences.usageMonitorEnabled && preferences.usageBridgeEnabled
@@ -196,13 +213,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func openUsagePanel() {
+    /// Show/hide the panel to match `showUsagePanel` (gated on the master
+    /// toggle). Only raises the window when it isn't already visible so
+    /// unrelated preference changes don't steal focus.
+    @MainActor
+    private func syncUsagePanelVisibility() {
+        let wantVisible = preferences.usageMonitorEnabled && preferences.showUsagePanel
+        guard wantVisible, let poller = usagePoller else {
+            usagePanelWindow?.hide()
+            return
+        }
+        if usagePanelWindow == nil {
+            usagePanelWindow = UsagePanelWindow(poller: poller, onUserClose: { [weak self] in
+                self?.preferences.showUsagePanel = false
+            })
+        }
+        if usagePanelWindow?.isVisible != true {
+            usagePanelWindow?.showAndBringToFront()
+        }
+    }
+
+    /// Account edits change what the poller reports, not how it runs — fetch a
+    /// fresh snapshot so the panel and the ESP32 don't wait out the 180s tick.
+    private func repollUsageAccounts() {
         MainActor.assumeIsolated {
             guard preferences.usageMonitorEnabled, let poller = usagePoller else { return }
-            if usagePanelWindow == nil {
-                usagePanelWindow = UsagePanelWindow(poller: poller)
-            }
-            usagePanelWindow?.showAndBringToFront()
+            Task { await poller.pollAll() }
         }
     }
 

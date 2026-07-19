@@ -58,6 +58,30 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(usageBridgePort, forKey: Self.usageBridgePortKey) }
     }
 
+    /// Whether the floating usage panel is shown. Gated on `usageMonitorEnabled`;
+    /// toggled from the menu bar and by the panel's close button.
+    @Published var showUsagePanel: Bool {
+        didSet { defaults.set(showUsagePanel, forKey: Self.showUsagePanelKey) }
+    }
+
+    /// Config-dir paths excluded from usage polling. Disabled-list semantics:
+    /// the default empty set opts every discovered account in.
+    @Published var disabledUsageAccountDirs: Set<String> {
+        didSet { defaults.set(disabledUsageAccountDirs.sorted(), forKey: Self.disabledUsageAccountsKey) }
+    }
+
+    /// Custom display names for usage accounts, keyed by config-dir path.
+    /// Missing/blank entries fall back to the name derived from the dir name.
+    @Published var usageAccountNames: [String: String] {
+        didSet { defaults.set(usageAccountNames, forKey: Self.usageAccountNamesKey) }
+    }
+
+    /// Preferred usage-account order as config-dir paths. Dirs not listed here
+    /// (newly discovered logins) are appended after the known ones.
+    @Published var usageAccountOrder: [String] {
+        didSet { defaults.set(usageAccountOrder, forKey: Self.usageAccountOrderKey) }
+    }
+
     /// The app build (`CFBundleVersion`) we last refreshed the on-disk hooks for.
     /// Drives the "refresh hooks once per app update" check in `AppDelegate`.
     @Published var lastHookRefreshBuild: String? {
@@ -101,6 +125,10 @@ final class Preferences: ObservableObject {
     private static let usageMonitorKey      = "usageMonitorEnabled"
     private static let usageBridgeKey       = "usageBridgeEnabled"
     private static let usageBridgePortKey   = "usageBridgePort"
+    private static let showUsagePanelKey    = "showUsagePanel"
+    private static let disabledUsageAccountsKey = "disabledUsageAccountDirs"
+    private static let usageAccountNamesKey = "usageAccountNames"
+    private static let usageAccountOrderKey = "usageAccountOrder"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -127,6 +155,10 @@ final class Preferences: ObservableObject {
         self.usageBridgeEnabled = defaults.bool(forKey: Self.usageBridgeKey)
         let storedPort = defaults.integer(forKey: Self.usageBridgePortKey)
         self.usageBridgePort = (1...65535).contains(storedPort) ? storedPort : Int(UsageBridgeServer.defaultPort)
+        self.showUsagePanel = defaults.bool(forKey: Self.showUsagePanelKey)
+        self.disabledUsageAccountDirs = Set(defaults.stringArray(forKey: Self.disabledUsageAccountsKey) ?? [])
+        self.usageAccountNames = (defaults.dictionary(forKey: Self.usageAccountNamesKey) as? [String: String]) ?? [:]
+        self.usageAccountOrder = defaults.stringArray(forKey: Self.usageAccountOrderKey) ?? []
 
         self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
         self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)

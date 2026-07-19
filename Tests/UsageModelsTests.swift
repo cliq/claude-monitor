@@ -42,6 +42,54 @@ final class UsageModelsTests: XCTestCase {
                        [".claude", ".claudewho-a", ".claudewho-b"].map { home.appendingPathComponent($0).path })
     }
 
+    // MARK: - Ordering / rename / disable
+
+    private let a = UsageAccountConfig(name: "a", configDir: "/h/.claudewho-a")
+    private let b = UsageAccountConfig(name: "b", configDir: "/h/.claudewho-b")
+    private let c = UsageAccountConfig(name: "c", configDir: "/h/.claudewho-c")
+
+    func test_ordered_appliesSavedOrderAndAppendsNewDirs() {
+        let out = UsageAccountConfig.ordered(discovered: [a, b, c],
+                                             order: ["/h/.claudewho-c", "/h/.claudewho-a"])
+        XCTAssertEqual(out.map(\.name), ["c", "a", "b"])
+    }
+
+    func test_ordered_ignoresVanishedDirsInSavedOrder() {
+        let out = UsageAccountConfig.ordered(discovered: [a, b],
+                                             order: ["/h/.claudewho-gone", "/h/.claudewho-b"])
+        XCTAssertEqual(out.map(\.name), ["b", "a"])
+    }
+
+    func test_resolve_filtersDisabledAccounts() {
+        let out = UsageAccountConfig.resolve(discovered: [a, b, c], order: [],
+                                             disabledDirs: ["/h/.claudewho-b"],
+                                             customNames: [:])
+        XCTAssertEqual(out.map(\.name), ["a", "c"])
+    }
+
+    func test_resolve_appliesCustomNames() {
+        let out = UsageAccountConfig.resolve(discovered: [a, b], order: [],
+                                             disabledDirs: [],
+                                             customNames: ["/h/.claudewho-a": "work"])
+        XCTAssertEqual(out.map(\.name), ["work", "b"])
+    }
+
+    func test_resolve_blankCustomNameFallsBackToDefault() {
+        let out = UsageAccountConfig.resolve(discovered: [a], order: [],
+                                             disabledDirs: [],
+                                             customNames: ["/h/.claudewho-a": "   "])
+        XCTAssertEqual(out.map(\.name), ["a"])
+    }
+
+    func test_resolve_combinesOrderRenameAndDisable() {
+        let out = UsageAccountConfig.resolve(
+            discovered: [a, b, c],
+            order: ["/h/.claudewho-c", "/h/.claudewho-b", "/h/.claudewho-a"],
+            disabledDirs: ["/h/.claudewho-b"],
+            customNames: ["/h/.claudewho-c": "main"])
+        XCTAssertEqual(out.map(\.name), ["main", "a"])
+    }
+
     // MARK: - JSON schema (what the ESP32 firmware parses)
 
     func test_snapshotEncodesFirmwareSchema() throws {

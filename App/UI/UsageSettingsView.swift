@@ -30,7 +30,8 @@ struct UsageSettingsView: View {
         }
         .padding(20)
         .onAppear {
-            accounts = UsageAccountConfig.discover()
+            accounts = UsageAccountConfig.ordered(discovered: UsageAccountConfig.discover(),
+                                                  order: preferences.usageAccountOrder)
             portText = String(preferences.usageBridgePort)
         }
     }
@@ -44,19 +45,70 @@ struct UsageSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(accounts) { account in
-                    HStack(spacing: 8) {
-                        Text(account.name)
-                            .font(.system(.caption, design: .monospaced).weight(.semibold))
-                        Text(account.configDir)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                List {
+                    ForEach(accounts) { account in
+                        accountRow(account)
+                            .listRowSeparator(.hidden)
+                    }
+                    .onMove { from, to in
+                        accounts.move(fromOffsets: from, toOffset: to)
+                        preferences.usageAccountOrder = accounts.map(\.configDir)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .frame(height: min(CGFloat(accounts.count), 5) * 30 + 8)
+                Text("Drag to reorder — the panel and external displays show accounts in this order. Unchecked accounts aren't polled. Leave the name empty to use the folder-derived default.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func accountRow(_ account: UsageAccountConfig) -> some View {
+        HStack(spacing: 8) {
+            Toggle("", isOn: enabledBinding(for: account))
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+            TextField(account.name, text: nameBinding(for: account))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 140)
+            Text(account.configDir)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Disabled-list semantics: checked = not in the disabled set.
+    private func enabledBinding(for account: UsageAccountConfig) -> Binding<Bool> {
+        Binding(
+            get: { !preferences.disabledUsageAccountDirs.contains(account.configDir) },
+            set: { enabled in
+                if enabled {
+                    preferences.disabledUsageAccountDirs.remove(account.configDir)
+                } else {
+                    preferences.disabledUsageAccountDirs.insert(account.configDir)
+                }
+            }
+        )
+    }
+
+    /// Empty field = no override; the placeholder shows the derived default.
+    private func nameBinding(for account: UsageAccountConfig) -> Binding<String> {
+        Binding(
+            get: { preferences.usageAccountNames[account.configDir] ?? "" },
+            set: { newValue in
+                if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                    preferences.usageAccountNames.removeValue(forKey: account.configDir)
+                } else {
+                    preferences.usageAccountNames[account.configDir] = newValue
+                }
+            }
+        )
     }
 
     @ViewBuilder
