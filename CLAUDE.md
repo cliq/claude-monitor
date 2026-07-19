@@ -45,6 +45,20 @@ Claude Code fires hook
 
 Events are decoded on the server's private queue, then dispatched onto the main queue before touching `SessionStore` (see `AppDelegate.applicationDidFinishLaunching`). Keep it that way — `SessionStore` is not thread-safe.
 
+### Usage-limits pipeline (opt-in, Settings → Usage)
+
+```
+ClaudeCodeKeychain (Claude Code's "Claude Code-credentials-<sha256(configDir)[:8]>" items)
+  → UsagePoller — polls https://api.anthropic.com/api/oauth/usage every 180s
+    per account discovered by ConfigDirectoryDiscovery; refreshes OAuth tokens
+    and writes them back so Claude Code stays logged in
+  → UsagePanelView (menu bar → "Open Usage Panel")
+  → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
+    the ESP32 desk panel (esp32-claude-monitor firmware)
+```
+
+The usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses — don't rename them. `UsagePoller.summarize`/`formatReset` are `nonisolated` pure functions; keep them that way for the tests.
+
 ### Runtime filesystem layout
 
 Everything the app writes outside the sandbox goes under `~/.claude-monitor/`:

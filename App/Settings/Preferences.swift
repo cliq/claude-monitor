@@ -41,6 +41,23 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(prowlOfflineHookEnabled, forKey: Self.prowlOfflineKey) }
     }
 
+    /// Master toggle for polling Anthropic's usage-limits endpoint for each
+    /// discovered Claude Code account.
+    @Published var usageMonitorEnabled: Bool {
+        didSet { defaults.set(usageMonitorEnabled, forKey: Self.usageMonitorKey) }
+    }
+
+    /// When true (and usage monitoring is on), serve the usage snapshot over
+    /// HTTP on the LAN for external displays (the ESP32 desk panel).
+    @Published var usageBridgeEnabled: Bool {
+        didSet { defaults.set(usageBridgeEnabled, forKey: Self.usageBridgeKey) }
+    }
+
+    /// TCP port for the usage bridge server.
+    @Published var usageBridgePort: Int {
+        didSet { defaults.set(usageBridgePort, forKey: Self.usageBridgePortKey) }
+    }
+
     /// The app build (`CFBundleVersion`) we last refreshed the on-disk hooks for.
     /// Drives the "refresh hooks once per app update" check in `AppDelegate`.
     @Published var lastHookRefreshBuild: String? {
@@ -81,6 +98,9 @@ final class Preferences: ObservableObject {
     private static let prowlEnabledKey      = "prowlEnabled"
     private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
     private static let lastHookRefreshBuildKey = "lastHookRefreshBuild"
+    private static let usageMonitorKey      = "usageMonitorEnabled"
+    private static let usageBridgeKey       = "usageBridgeEnabled"
+    private static let usageBridgePortKey   = "usageBridgePort"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -102,6 +122,11 @@ final class Preferences: ObservableObject {
         // defaults to `true` rather than `false` — preserving the historical
         // "window is visible" behavior for upgrading users.
         self.showDashboardWindow = (defaults.object(forKey: Self.showWindowKey) as? Bool) ?? true
+
+        self.usageMonitorEnabled = defaults.bool(forKey: Self.usageMonitorKey)
+        self.usageBridgeEnabled = defaults.bool(forKey: Self.usageBridgeKey)
+        let storedPort = defaults.integer(forKey: Self.usageBridgePortKey)
+        self.usageBridgePort = (1...65535).contains(storedPort) ? storedPort : Int(UsageBridgeServer.defaultPort)
 
         self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
         self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)

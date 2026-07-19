@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private var onboardingWindow: NSWindow?
     private var windowVisibilityCancellable: AnyCancellable?
+    private var usagePoller: UsagePoller?
+    private var usageBridge: UsageBridgeServer?
+    private var usagePanelWindow: UsagePanelWindow?
+    private var usageCancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 1. Single instance guard. Skipped in the test host so a running
@@ -119,8 +123,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preferences: preferences,
             onSessionClick: { [weak self] session in self?.handleClick(on: session) },
             onOpenDashboard: { [weak self] in self?.dashboard.showAndBringToFront() },
+            onOpenUsage:     { [weak self] in self?.openUsagePanel() },
             onOpenSettings:  { [weak self] in self?.openSettings() }
         )
+
+        // 5a. Usage-limit monitoring + LAN bridge for external displays.
+        //     Re-applied whenever any of the usage preferences change.
+        applyUsagePreferences()
+        Publishers.Merge3(preferences.$usageMonitorEnabled.dropFirst().map { _ in () },
+                          preferences.$usageBridgeEnabled.dropFirst().map { _ in () },
+                          preferences.$usageBridgePort.dropFirst().map { _ in () })
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in self?.applyUsagePreferences() }
+            .store(in: &usageCancellables)
 
         // 6. First-run onboarding.
         if !preferences.hasOnboarded && ProcessInfo.processInfo.environment["CLAUDE_MONITOR_SKIP_ONBOARDING"] != "1" {
@@ -143,6 +158,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.dashboard.hide()
                 }
             }
+    }
+
+    /// Start/stop the usage poller and bridge server to match preferences.
+    /// Idempotent — safe to call on every preference change. Only ever invoked
+    /// on the main thread (launch, RunLoop.main sink, menu action), so hopping
+    /// onto the main actor is an assertion, not a dispatch.
+    private func applyUsagePreferences() {
+        MainActor.assumeIsolated { applyUsagePreferencesOnMain() }
+    }
+
+    @MainActor
+    private func applyUsagePreferencesOnMain() {
+        if preferences.usageMonitorEnabled {
+            if usagePoller == nil { usagePoller = UsagePoller() }
+            usagePoller?.start()
+        } else {
+            usagePoller?.stop()
+            usagePanelWindow?.hide()
+        }
+
+        let desiredPort = UInt16(clamping: preferences.usageBridgePort)
+        let wantBridge = preferences.usageMonitorEnabled && preferences.usageBridgeEnabled
+        if !wantBridge || usageBridge?.port != desiredPort {
+            usageBridge?.stop()
+            usageBridge = nil
+        }
+        if wantBridge, usageBridge == nil, let poller = usagePoller {
+            let bridge = UsageBridgeServer(snapshot: { poller.snapshot() },
+                                           display: { poller.displayOn })
+            do {
+                try bridge.start(port: desiredPort)
+                usageBridge = bridge
+            } catch {
+                NSLog("UsageBridgeServer: failed to start on port \(desiredPort) — \(error)")
+            }
+        }
+    }
+
+    private func openUsagePanel() {
+        MainActor.assumeIsolated {
+            guard preferences.usageMonitorEnabled, let poller = usagePoller else { return }
+            if usagePanelWindow == nil {
+                usagePanelWindow = UsagePanelWindow(poller: poller)
+            }
+            usagePanelWindow?.showAndBringToFront()
+        }
     }
 
     private func handleClick(on session: Session) {
