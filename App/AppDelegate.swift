@@ -202,8 +202,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             usageBridge = nil
         }
         if wantBridge, usageBridge == nil, let poller = usagePoller {
+            let prefs = preferences
             let bridge = UsageBridgeServer(snapshot: { poller.snapshot() },
-                                           display: { poller.displayOn })
+                                           display: { prefs.usageBridgeMirrorsDisplay ? poller.displayOn : true })
             do {
                 try bridge.start(port: desiredPort)
                 usageBridge = bridge

@@ -124,6 +124,9 @@ struct UsageSettingsView: View {
                     .onChange(of: preferences.usageBridgeEnabled) { _, _ in commitPort() }
             }
             .disabled(!preferences.usageBridgeEnabled)
+            Toggle("Turn external displays off when this Mac's screen is off",
+                   isOn: $preferences.usageBridgeMirrorsDisplay)
+                .disabled(!preferences.usageBridgeEnabled)
             Text("Devices on your network (e.g. the ESP32 desk panel) can read the snapshot at http://<this-mac>:\(preferences.usageBridgePort)/usage and the display power state at /display. Anyone on your LAN can see these numbers while this is on.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -58,6 +58,12 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(usageBridgePort, forKey: Self.usageBridgePortKey) }
     }
 
+    /// When true (default), `/display` mirrors this Mac's screen power state so
+    /// external displays sleep with the Mac. When false, it always reports "on".
+    @Published var usageBridgeMirrorsDisplay: Bool {
+        didSet { defaults.set(usageBridgeMirrorsDisplay, forKey: Self.usageBridgeMirrorsDisplayKey) }
+    }
+
     /// Whether the floating usage panel is shown. Gated on `usageMonitorEnabled`;
     /// toggled from the menu bar and by the panel's close button.
     @Published var showUsagePanel: Bool {
@@ -125,6 +131,7 @@ final class Preferences: ObservableObject {
     private static let usageMonitorKey      = "usageMonitorEnabled"
     private static let usageBridgeKey       = "usageBridgeEnabled"
     private static let usageBridgePortKey   = "usageBridgePort"
+    private static let usageBridgeMirrorsDisplayKey = "usageBridgeMirrorsDisplay"
     private static let showUsagePanelKey    = "showUsagePanel"
     private static let disabledUsageAccountsKey = "disabledUsageAccountDirs"
     private static let usageAccountNamesKey = "usageAccountNames"
@@ -155,6 +162,8 @@ final class Preferences: ObservableObject {
         self.usageBridgeEnabled = defaults.bool(forKey: Self.usageBridgeKey)
         let storedPort = defaults.integer(forKey: Self.usageBridgePortKey)
         self.usageBridgePort = (1...65535).contains(storedPort) ? storedPort : Int(UsageBridgeServer.defaultPort)
+        // Missing key defaults to true — mirroring is the historical behavior.
+        self.usageBridgeMirrorsDisplay = (defaults.object(forKey: Self.usageBridgeMirrorsDisplayKey) as? Bool) ?? true
         self.showUsagePanel = defaults.bool(forKey: Self.showUsagePanelKey)
         self.disabledUsageAccountDirs = Set(defaults.stringArray(forKey: Self.disabledUsageAccountsKey) ?? [])
         self.usageAccountNames = (defaults.dictionary(forKey: Self.usageAccountNamesKey) as? [String: String]) ?? [:]

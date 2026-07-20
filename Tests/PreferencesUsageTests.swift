@@ -22,6 +22,7 @@ final class PreferencesUsageTests: XCTestCase {
         XCTAssertFalse(prefs.usageMonitorEnabled)
         XCTAssertFalse(prefs.usageBridgeEnabled)
         XCTAssertEqual(prefs.usageBridgePort, 8737)
+        XCTAssertTrue(prefs.usageBridgeMirrorsDisplay)
         XCTAssertFalse(prefs.showUsagePanel)
         XCTAssertEqual(prefs.disabledUsageAccountDirs, [])
         XCTAssertEqual(prefs.usageAccountNames, [:])
@@ -47,11 +48,13 @@ final class PreferencesUsageTests: XCTestCase {
         prefs.usageMonitorEnabled = true
         prefs.usageBridgeEnabled = true
         prefs.usageBridgePort = 9000
+        prefs.usageBridgeMirrorsDisplay = false
 
         let reloaded = Preferences(defaults: defaults)
         XCTAssertTrue(reloaded.usageMonitorEnabled)
         XCTAssertTrue(reloaded.usageBridgeEnabled)
         XCTAssertEqual(reloaded.usageBridgePort, 9000)
+        XCTAssertFalse(reloaded.usageBridgeMirrorsDisplay)
     }
 
     func test_invalidStoredPortFallsBackToDefault() {
