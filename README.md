@@ -43,6 +43,29 @@ If you juggle multiple Claude configs, pair it with [claudewho](https://github.c
 
 Get a phone push every time a session needs your attention or finishes via [Prowl](https://www.prowlapp.com/). Enable it in **Settings → Push Notifications**, paste your Prowl API key, and click **Test** to verify.
 
+## Usage limits (optional)
+
+Claude Monitor can also show your Claude Code **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit — for every account it finds. Enable it in **Settings → Usage** and add the Claude config directories whose accounts you want to track.
+
+The app reads each account's OAuth token from the Keychain (the same credentials Claude Code stores) and polls `https://api.anthropic.com/api/oauth/usage` every 180 seconds. Refreshed tokens are written back, so tracking an account here keeps it logged in — it never signs you out of Claude Code. Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns.
+
+The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below.
+
+## ESP32 desk panel (optional)
+
+`firmware/` holds an always-on desk display that renders the same usage limits over WiFi. It targets the **Guition ESP32-S3-4848S040** — a 4" 480×480 IPS panel (ST7701S RGB) with an ESP32-S3 and PSRAM. It polls the macOS app's usage endpoint every 60 s and shows each account's three limits, with a mascot animation when a limit resets.
+
+Enable the usage bridge in the app (**Settings → Usage**), then build and flash with [PlatformIO](https://platformio.org):
+
+```sh
+cd firmware
+cp include/secrets.h.example include/secrets.h   # set WiFi + your Mac's http://<ip>:8737/usage
+make flash        # build + upload over USB
+make monitor      # serial console at 115200 baud
+```
+
+`make build` compiles without uploading. The panel firmware is a self-contained PlatformIO project — the LVGL, Arduino_GFX, and ArduinoJson dependencies are resolved on first build. The mascot animations ship as a pre-generated header (`src/mascot_gifs.h`); the pipeline that produces them is not included here.
+
 ## Requirements
 
 - macOS 14 or later

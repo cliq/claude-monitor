@@ -17,3 +17,7 @@ Configuration/LocalSigning.xcconfig
 
 # Exported signing cert / API key files — never commit
 keys/
+
+# ESP32 firmware — build output and per-device secrets
+firmware/.pio/
+firmware/include/secrets.h
