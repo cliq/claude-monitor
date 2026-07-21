@@ -47,11 +47,19 @@ Get a phone push every time a session needs your attention or finishes via [Prow
 
 Claude Monitor can also show your Claude Code **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit — for every account it finds. Enable it in **Settings → Usage** and add the Claude config directories whose accounts you want to track.
 
+<p align="center">
+  <img src="docs/images/usage-panel.png" alt="Claude Usage panel showing session, weekly, and Fable limits for three accounts" width="440" />
+</p>
+
 The app reads each account's OAuth token from the Keychain (the same credentials Claude Code stores) and polls `https://api.anthropic.com/api/oauth/usage` every 180 seconds. Refreshed tokens are written back, so tracking an account here keeps it logged in — it never signs you out of Claude Code. Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns.
 
 The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below.
 
 ## ESP32 desk panel (optional)
+
+<p align="center">
+  <img src="docs/images/esp32-panel.jpg" alt="ESP32 desk panel showing Claude usage limits for three accounts" width="440" />
+</p>
 
 `firmware/` holds an always-on desk display that renders the same usage limits over WiFi. It targets the **Guition ESP32-S3-4848S040** — a 4" 480×480 IPS panel (ST7701S RGB) with an ESP32-S3 and PSRAM. It polls the macOS app's usage endpoint every 60 s and shows each account's three limits, with a mascot animation when a limit resets.
 
