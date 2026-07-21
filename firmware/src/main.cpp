@@ -154,6 +154,7 @@ struct MetricW {
   lv_obj_t *reset;
 };
 struct AccountW {
+  lv_obj_t *row; /* container for the whole row; hidden when unused */
   lv_obj_t *name;
   lv_obj_t *plan;
   MetricW m[N_METRICS];
@@ -211,24 +212,36 @@ static void build_ui() {
   const lv_coord_t col_w = 136;
 
   for (int i = 0; i < N_ACCOUNTS; i++) {
-    lv_coord_t ry = i * row_h;
+    /* Each row is a container so an unused account (fewer than N_ACCOUNTS in the
+     * feed) can be hidden wholesale, separator included. Child positions are
+     * relative to the row, so drop the per-row y offset. */
+    lv_obj_t *row = lv_obj_create(scr);
+    lv_obj_set_pos(row, 0, i * row_h);
+    lv_obj_set_size(row, 480, row_h);
+    lv_obj_set_style_bg_color(row, lv_color_hex(C_BG), 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_radius(row, 0, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    ui[i].row = row;
 
-    ui[i].name = make_label(scr, &lv_font_montserrat_14, C_NAME, 20, ry + 12, "-");
+    ui[i].name = make_label(row, &lv_font_montserrat_14, C_NAME, 20, 12, "-");
     lv_obj_set_style_text_letter_space(ui[i].name, 2, 0);
-    ui[i].plan = make_label(scr, &lv_font_montserrat_12, C_MUTED, 20, ry + 14, "");
+    ui[i].plan = make_label(row, &lv_font_montserrat_12, C_MUTED, 20, 14, "");
 
     for (int j = 0; j < N_METRICS; j++) {
       lv_coord_t x = col_x[j];
       MetricW *m = &ui[i].m[j];
 
-      lv_obj_t *lab = make_label(scr, &lv_font_montserrat_12, C_MUTED, x, ry + 40, METRIC_LABELS[j]);
+      lv_obj_t *lab = make_label(row, &lv_font_montserrat_12, C_MUTED, x, 40, METRIC_LABELS[j]);
       lv_obj_set_style_text_letter_space(lab, 1, 0);
 
-      m->value = make_label(scr, &lv_font_montserrat_36, C_IDLE, x, ry + 56, "-");
-      m->pct = make_label(scr, &lv_font_montserrat_16, C_MUTED, x, ry + 74, "");
+      m->value = make_label(row, &lv_font_montserrat_36, C_IDLE, x, 56, "-");
+      m->pct = make_label(row, &lv_font_montserrat_16, C_MUTED, x, 74, "");
 
-      m->bar = lv_bar_create(scr);
-      lv_obj_set_pos(m->bar, x, ry + 100);
+      m->bar = lv_bar_create(row);
+      lv_obj_set_pos(m->bar, x, 100);
       lv_obj_set_size(m->bar, col_w, 5);
       lv_bar_set_range(m->bar, 0, 100);
       lv_bar_set_value(m->bar, 0, LV_ANIM_OFF);
@@ -239,12 +252,14 @@ static void build_ui() {
       lv_obj_set_style_bg_color(m->bar, lv_color_hex(C_SAND), LV_PART_INDICATOR);
       lv_obj_set_style_bg_opa(m->bar, LV_OPA_COVER, LV_PART_INDICATOR);
 
-      m->reset = make_label(scr, &lv_font_montserrat_14, C_RESET, x, ry + 114, "");
+      m->reset = make_label(row, &lv_font_montserrat_14, C_RESET, x, 114, "");
     }
 
-    if (i < N_ACCOUNTS - 1) {
-      lv_obj_t *sep = lv_obj_create(scr);
-      lv_obj_set_pos(sep, 0, ry + row_h - 1);
+    /* Separator at the TOP of rows below the first, so hiding a row also hides
+     * the line above it (a single-account feed shows one clean card). */
+    if (i > 0) {
+      lv_obj_t *sep = lv_obj_create(row);
+      lv_obj_set_pos(sep, 0, 0);
       lv_obj_set_size(sep, 480, 1);
       lv_obj_set_style_bg_color(sep, lv_color_hex(C_LINE), 0);
       lv_obj_set_style_bg_opa(sep, LV_OPA_COVER, 0);
@@ -375,7 +390,15 @@ static bool fetch_usage() {
   int i = 0;
   for (JsonObject acc : accounts) {
     if (i >= N_ACCOUNTS) break;
+    lv_obj_clear_flag(ui[i].row, LV_OBJ_FLAG_HIDDEN);
     apply_account(i++, acc);
+  }
+  /* Hide rows the feed no longer includes (e.g. dropping from 3 to 1 account)
+   * and forget their history so a later reappearance doesn't false-celebrate. */
+  for (int j = i; j < N_ACCOUNTS; j++) {
+    lv_obj_add_flag(ui[j].row, LV_OBJ_FLAG_HIDDEN);
+    prev_session_pct[j] = -2;
+    prev_weekly_pct[j] = -2;
   }
   return i > 0;
 }
