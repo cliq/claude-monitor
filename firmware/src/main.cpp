@@ -208,7 +208,8 @@ static void build_ui() {
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   const lv_coord_t row_h = 151;   /* (480 - 27 status) / 3 */
-  const lv_coord_t col_x[N_METRICS] = {20, 182, 344};
+  /* 20px margin on both sides: 3 x 136 columns + 2 x 16 gaps = 440 */
+  const lv_coord_t col_x[N_METRICS] = {20, 172, 324};
   const lv_coord_t col_w = 136;
 
   for (int i = 0; i < N_ACCOUNTS; i++) {
