@@ -3,12 +3,17 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var preferences: Preferences
+    let updateChecker: UpdateChecker
 
     var body: some View {
         TabView {
             DirectoriesSettingsView(preferences: preferences)
                 .frame(width: 560, height: 440)
                 .tabItem { Label("Directories", systemImage: "folder") }
+
+            GeneralSettingsView(preferences: preferences, updateChecker: updateChecker)
+                .frame(width: 560, height: 300)
+                .tabItem { Label("General", systemImage: "gearshape") }
 
             AppearanceSettingsView(preferences: preferences)
                 .frame(width: 560, height: 300)

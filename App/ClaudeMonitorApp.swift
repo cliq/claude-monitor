@@ -10,7 +10,8 @@ struct ClaudeMonitorApp: App {
         // A Settings scene hosts the preferences window. All other windows are
         // constructed in AppDelegate so we control their lifetimes directly.
         Settings {
-            SettingsView(preferences: delegate.preferences)
+            SettingsView(preferences: delegate.preferences,
+                         updateChecker: delegate.updateChecker)
         }
         .commands {
             // Replace the auto-generated "About ClaudeMonitor" item with one that

@@ -11,18 +11,23 @@ final class MenuBarController: NSObject {
     private let onSessionClick: (Session) -> Void
     private let onOpenDashboard: () -> Void
     private let onOpenSettings: () -> Void
+    /// Queried on every menu open (the menu rebuilds in `menuNeedsUpdate`), so
+    /// the "Update available" item appears without any observation plumbing.
+    private let availableUpdate: () -> UpdateChecker.Update?
     private var cancellables: Set<AnyCancellable> = []
 
     init(store: SessionStore,
          preferences: Preferences,
          onSessionClick: @escaping (Session) -> Void,
          onOpenDashboard: @escaping () -> Void,
-         onOpenSettings: @escaping () -> Void) {
+         onOpenSettings: @escaping () -> Void,
+         availableUpdate: @escaping () -> UpdateChecker.Update? = { nil }) {
         self.store = store
         self.preferences = preferences
         self.onSessionClick = onSessionClick
         self.onOpenDashboard = onOpenDashboard
         self.onOpenSettings = onOpenSettings
+        self.availableUpdate = availableUpdate
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -51,6 +56,16 @@ final class MenuBarController: NSObject {
 
     private func rebuildMenu() {
         menu.removeAllItems()
+
+        if let update = availableUpdate() {
+            let item = NSMenuItem(title: "Update available: \(update.version)…",
+                                  action: #selector(openUpdatePage(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = update.url
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
 
         appendSessionRows(into: menu)
 
@@ -185,6 +200,11 @@ final class MenuBarController: NSObject {
     }
 
     @objc private func openDashboard()         { onOpenDashboard() }
+
+    @objc private func openUpdatePage(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     @objc private func toggleUsagePanel() {
         preferences.showUsagePanel.toggle()

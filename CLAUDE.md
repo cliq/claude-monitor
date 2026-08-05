@@ -73,6 +73,10 @@ The widget never polls or touches the keychain: it renders the last `UsageSnapsh
 - Files shared into the widget target are listed explicitly in `project.yml` (`UsageModels`, `RGB`, `UsagePalette`, `UsageFormatting`, `UsageSnapshotStore`). They must stay Foundation/SwiftUI-pure: no AppKit windows, keychain, discovery, or `Bundle.main` resource lookups. The widget kind string `"UsageWidget"` (`UsageSnapshotStore.widgetKind`) must never change — it's how the app targets reloads and how macOS tracks placed widgets.
 - Widget views must derive "now" from `entry.date`, never `Date()`, so archived timeline entries render honestly; staleness threshold is the shared `UsageFormat.staleAfter` (= `UsagePoller.pollInterval * 3`).
 
+### Update checks
+
+`App/Core/UpdateChecker.swift` polls the GitHub `releases/latest` API (repo hardcoded in `latestReleaseURL`) at launch and every 24h, gated by the `updateCheckEnabled` preference (default on). It only surfaces a menu-bar item + a line in Settings → General — nothing downloads. Checks are ETag-conditional and failures are silent. `isNewer`/`parseLatestRelease` are `nonisolated` pure statics; keep them that way for the tests.
+
 ### Runtime filesystem layout
 
 Everything the app writes outside the sandbox goes under `~/.claude-monitor/`:

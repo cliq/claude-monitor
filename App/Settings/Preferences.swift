@@ -41,6 +41,12 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(prowlOfflineHookEnabled, forKey: Self.prowlOfflineKey) }
     }
 
+    /// When true (default), check GitHub Releases for a newer version at launch
+    /// and once a day. The check only surfaces a menu item — nothing downloads.
+    @Published var updateCheckEnabled: Bool {
+        didSet { defaults.set(updateCheckEnabled, forKey: Self.updateCheckKey) }
+    }
+
     /// Master toggle for polling Anthropic's usage-limits endpoint for each
     /// discovered Claude Code account.
     @Published var usageMonitorEnabled: Bool {
@@ -128,6 +134,7 @@ final class Preferences: ObservableObject {
     private static let prowlEnabledKey      = "prowlEnabled"
     private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
     private static let lastHookRefreshBuildKey = "lastHookRefreshBuild"
+    private static let updateCheckKey       = "updateCheckEnabled"
     private static let usageMonitorKey      = "usageMonitorEnabled"
     private static let usageBridgeKey       = "usageBridgeEnabled"
     private static let usageBridgePortKey   = "usageBridgePort"
@@ -158,6 +165,8 @@ final class Preferences: ObservableObject {
         // "window is visible" behavior for upgrading users.
         self.showDashboardWindow = (defaults.object(forKey: Self.showWindowKey) as? Bool) ?? true
 
+        // Missing key defaults to true — update checks are on unless opted out.
+        self.updateCheckEnabled = (defaults.object(forKey: Self.updateCheckKey) as? Bool) ?? true
         self.usageMonitorEnabled = defaults.bool(forKey: Self.usageMonitorKey)
         self.usageBridgeEnabled = defaults.bool(forKey: Self.usageBridgeKey)
         let storedPort = defaults.integer(forKey: Self.usageBridgePortKey)

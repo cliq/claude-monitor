@@ -6,6 +6,7 @@ import WidgetKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let preferences = Preferences()
+    let updateChecker = UpdateChecker()
     private var store: SessionStore!
     private var pushNotifier: PushNotifier!
     private var server: EventServer!
@@ -125,8 +126,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preferences: preferences,
             onSessionClick: { [weak self] session in self?.handleClick(on: session) },
             onOpenDashboard: { [weak self] in self?.dashboard.showAndBringToFront() },
-            onOpenSettings:  { [weak self] in self?.openSettings() }
+            onOpenSettings:  { [weak self] in self?.openSettings() },
+            availableUpdate: { [weak self] in self?.updateChecker.availableUpdate }
         )
+
+        // 5b. Daily update check against GitHub Releases (menu item only,
+        //     nothing downloads). Started/stopped with the preference.
+        if preferences.updateCheckEnabled { updateChecker.start() }
+        preferences.$updateCheckEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                enabled ? self?.updateChecker.start() : self?.updateChecker.stop()
+            }
+            .store(in: &usageCancellables)
 
         // 5a. Usage-limit monitoring + LAN bridge for external displays.
         //     Re-applied whenever any of the usage preferences change.
