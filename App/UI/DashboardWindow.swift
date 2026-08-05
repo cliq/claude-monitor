@@ -48,19 +48,29 @@ final class DashboardWindow {
         // Initial frame: restore the saved top-right corner if it still lives on a
         // connected screen, otherwise default to the top-right of the main screen.
         let initialSize = desiredContentSize(
-            count: store.orderedSessions.count,
+            count: store.visibleSessions.count,
             metrics: TileMetrics.resolve(preferences.tileSize)
         )
         let origin = initialOrigin(for: initialSize, saved: preferences.dashboardWindowFrame)
         window.setFrame(NSRect(origin: origin, size: initialSize), display: false, animate: false)
+        // From here on, only `resize`/`restoreSavedFrameIfPossible` may change the
+        // window's size — see `BorderlessFloatingWindow.isSizeLocked`.
+        window.isSizeLocked = true
 
         observeFrameChanges()
         observeScreenParameterChanges()
         observeWakeNotifications()
 
-        // React to either the session count or the tile-size preference changing.
+        // React to the visible session count (ignored sessions excluded — the grid
+        // renders `visibleSessions`, so sizing on `orderedSessions` would leave an
+        // empty slot per ignored session) or the tile-size preference changing.
+        // The filter is inlined instead of reading `store.visibleSessions` in the
+        // sink because @Published emits before the property is updated.
+        let visibleCount = Publishers.CombineLatest(store.$orderedSessions, store.$ignoredSessionIds)
+            .map { sessions, ignored in sessions.filter { !ignored.contains($0.id) }.count }
+            .removeDuplicates()
         subscription = Publishers.CombineLatest(
-            store.$orderedSessions.map(\.count).removeDuplicates(),
+            visibleCount,
             preferences.$tileSize.removeDuplicates()
         )
         .sink { [weak self] count, size in
@@ -95,8 +105,8 @@ final class DashboardWindow {
         let rightX = oldFrame.origin.x + oldFrame.size.width
         let topY = oldFrame.origin.y + oldFrame.size.height
         let newOrigin = NSPoint(x: rightX - newSize.width, y: topY - newSize.height)
-        window.setFrame(NSRect(origin: newOrigin, size: newSize),
-                        display: window.isVisible, animate: false)
+        window.setFrameAuthorized(NSRect(origin: newOrigin, size: newSize),
+                                  display: window.isVisible)
     }
 
     /// Restore the saved top-right corner if the saved frame's center still lives on a
@@ -232,6 +242,35 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 final class BorderlessFloatingWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    /// On macOS 26 (Tahoe), `NSHostingView.windowDidLayout` calls its private
+    /// `updateAnimatedWindowSize` and resizes the hosting window to SwiftUI's
+    /// ideal content size even when `sizingOptions` is empty — pre-Tahoe, the
+    /// empty option set disabled all hosting-driven window sizing. That fires
+    /// milliseconds after every `DashboardWindow.resize` and shrinks the window
+    /// (e.g. a 220×124 single-tile frame down to 220×98), clipping the tiles.
+    /// All sizing is owned by `DashboardWindow`, so once it arms this lock,
+    /// frame changes that alter the *size* are dropped unless they come through
+    /// `setFrameAuthorized`. Origin-only changes (user drags, screen-change
+    /// evacuations) always pass.
+    var isSizeLocked = false
+
+    func setFrameAuthorized(_ frameRect: NSRect, display: Bool) {
+        let wasLocked = isSizeLocked
+        isSizeLocked = false
+        defer { isSizeLocked = wasLocked }
+        setFrame(frameRect, display: display, animate: false)
+    }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        guard !isSizeLocked || frameRect.size == frame.size else { return }
+        super.setFrame(frameRect, display: flag)
+    }
+
+    override func setFrame(_ frameRect: NSRect, display displayFlag: Bool, animate animateFlag: Bool) {
+        guard !isSizeLocked || frameRect.size == frame.size else { return }
+        super.setFrame(frameRect, display: displayFlag, animate: animateFlag)
+    }
 
     /// Pass programmatic frames through unchanged. Default `NSWindow` clamps the
     /// frame to the screen's visible area; when we grow the window to fit a new
