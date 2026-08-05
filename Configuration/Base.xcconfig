@@ -5,4 +5,8 @@ CODE_SIGN_IDENTITY = Apple Development
 
 APP_BUNDLE_ID = com.cliqconsulting.claudemonitor
 
+// Team-prefixed App Group shared by app + widget. Team-prefixed groups need
+// no provisioning profile for Developer ID.
+APP_GROUP_ID = $(DEVELOPMENT_TEAM).com.cliqconsulting.claudemonitor
+
 #include? "LocalSigning.xcconfig"

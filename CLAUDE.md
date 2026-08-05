@@ -55,9 +55,23 @@ ClaudeCodeKeychain (Claude Code's "Claude Code-credentials-<sha256(configDir)[:8
   → UsagePanelView (menu bar → "Open Usage Panel")
   → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
     the ESP32 desk panel (esp32-claude-monitor firmware)
+  → UsageSnapshotStore — usage-snapshot.json in the App Group container,
+    written after each poll (UsagePoller's injected `publish` hook)
+  → ClaudeMonitorWidget.appex — sandboxed WidgetKit extension; TimelineProvider
+    reads the snapshot file, WidgetCenter reloads are triggered by the app
 ```
 
-The usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses — don't rename them. `UsagePoller.summarize`/`formatReset` are `nonisolated` pure functions; keep them that way for the tests.
+The usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses **and** the widget's snapshot file — never rename or remove keys, additive changes only (`*_resets_at` and `schema_version` were added this way; the firmware's per-key parser ignores unknown keys). `UsagePoller.summarize`/`formatReset` forward to the pure statics in `UsageFormat` (`App/Core/Usage/UsageFormatting.swift`); keep all of them `nonisolated` pure for the tests.
+
+### Usage widget
+
+The widget never polls or touches the keychain: it renders the last `UsageSnapshot` the app published. `UsagePoller` gets an injected `publish:` closure (called at the end of `pollAll()`, when `accounts` and `updatedAt` are consistent — don't replace it with a Combine sink; `@Published` emits on willSet and would pair new accounts with the old timestamp). `AppDelegate` wires it to `UsageSnapshotStore.write` + a hash-throttled `WidgetCenter.reloadTimelines`; disabling usage monitoring clears the file so the widget shows its "monitoring off" state.
+
+- The App Group is team-prefixed: `APP_GROUP_ID = $(DEVELOPMENT_TEAM).com.cliqconsulting.claudemonitor` in `Configuration/Base.xcconfig`, surfaced to code via the `AppGroupIdentifier` Info.plist key on both targets. Team-prefixed groups are authorized by the code signature alone — no provisioning profile needed for Developer ID, no macOS 15 TCC prompt.
+- Everything in `UsageSnapshotStore` is nil-safe by design: with an empty `DEVELOPMENT_TEAM` (contributors without signing) or an ad-hoc signature the group container is unavailable and the publish path silently no-ops — the app, panel, ESP32 bridge, and `make test` must keep working.
+- **Ad-hoc builds cannot exercise the widget** (`make install` signs with `CODE_SIGN_IDENTITY=-`; no team ID → the group entitlement doesn't validate). Test widgets from a team-signed build installed in `/Applications` — widget registration is path-sensitive, and a DerivedData copy makes `pluginkit` register a stale path so `WidgetCenter` reloads appear to do nothing.
+- Files shared into the widget target are listed explicitly in `project.yml` (`UsageModels`, `RGB`, `UsagePalette`, `UsageFormatting`, `UsageSnapshotStore`). They must stay Foundation/SwiftUI-pure: no AppKit windows, keychain, discovery, or `Bundle.main` resource lookups. The widget kind string `"UsageWidget"` (`UsageSnapshotStore.widgetKind`) must never change — it's how the app targets reloads and how macOS tracks placed widgets.
+- Widget views must derive "now" from `entry.date`, never `Date()`, so archived timeline entries render honestly; staleness threshold is the shared `UsageFormat.staleAfter` (= `UsagePoller.pollInterval * 3`).
 
 ### Runtime filesystem layout
 

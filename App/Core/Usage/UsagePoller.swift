@@ -26,11 +26,14 @@ final class UsagePoller: ObservableObject {
     static let pollInterval: TimeInterval = 180 // below this the API 429s
 
     private let accountsProvider: () -> [UsageAccountConfig]
+    private let publish: (UsageSnapshot) -> Void
     private var pollTimer: Timer?
     private var displayTimer: Timer?
 
-    init(accountsProvider: @escaping () -> [UsageAccountConfig] = { UsageAccountConfig.discover() }) {
+    init(accountsProvider: @escaping () -> [UsageAccountConfig] = { UsageAccountConfig.discover() },
+         publish: @escaping (UsageSnapshot) -> Void = { _ in }) {
         self.accountsProvider = accountsProvider
+        self.publish = publish
     }
 
     func start() {
@@ -76,6 +79,10 @@ final class UsagePoller: ObservableObject {
         }
         accounts = results
         updatedAt = Date()
+        // @Published emits on willSet, so an external Combine sink observing
+        // `accounts`/`updatedAt` individually could pair new accounts with the
+        // old timestamp; publish only after both fields are consistent.
+        publish(snapshot())
     }
 
     // MARK: - OAuth
@@ -164,49 +171,15 @@ final class UsagePoller: ObservableObject {
         return json
     }
 
+    // Thin forwarders so existing call sites (and `Tests/UsagePollerTests.swift`)
+    // keep compiling — the actual implementation lives in `UsageFormat` so it
+    // can be shared without pulling in this poller's networking/keychain deps.
     nonisolated static func summarize(raw: [String: Any], name: String, plan: String) -> AccountUsage {
-        var out = AccountUsage(name: name, status: "ok")
-        out.plan = plan.uppercased()
-
-        if let session = raw["five_hour"] as? [String: Any],
-           let resets = session["resets_at"] as? String {
-            out.sessionPct = Int((session["utilization"] as? Double ?? 0).rounded())
-            out.sessionResets = formatReset(resets)
-        } // else: idle, keep -1
-
-        if let weekly = raw["seven_day"] as? [String: Any] {
-            out.weeklyPct = Int((weekly["utilization"] as? Double ?? 0).rounded())
-            out.weeklyResets = formatReset(weekly["resets_at"] as? String)
-        }
-
-        // Model-scoped weekly limit (e.g. the Fable cap) lives in the limits list.
-        for lim in raw["limits"] as? [[String: Any]] ?? [] {
-            guard lim["kind"] as? String == "weekly_scoped",
-                  let scope = lim["scope"] as? [String: Any] else { continue }
-            let model = (scope["model"] as? [String: Any])?["display_name"] as? String ?? "model"
-            out.modelLabel = model.uppercased()
-            out.modelPct = lim["percent"] as? Int ?? 0
-            out.modelResets = formatReset(lim["resets_at"] as? String)
-            break
-        }
-        return out
+        UsageFormat.summarize(raw: raw, name: name, plan: plan)
     }
 
     /// Absolute local reset time: "23:50" if today, else "Fri 12:00".
     nonisolated static func formatReset(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = parser.date(from: iso)
-        if date == nil {
-            parser.formatOptions = [.withInternetDateTime]
-            date = parser.date(from: iso)
-        }
-        guard var d = date else { return "" }
-        d = Date(timeIntervalSinceReferenceDate: (d.timeIntervalSinceReferenceDate / 60).rounded() * 60)
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = Calendar.current.isDateInToday(d) ? "HH:mm" : "E HH:mm"
-        return fmt.string(from: d)
+        UsageFormat.formatReset(iso)
     }
 }

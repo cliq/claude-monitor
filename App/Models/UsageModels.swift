@@ -1,68 +1,20 @@
 import Foundation
 
-/// One Claude Code login to poll usage for: a config directory plus the short
-/// name shown on the dashboard/panel. Derived from `ConfigDirectoryDiscovery`
-/// rather than configured by hand.
-struct UsageAccountConfig: Identifiable, Equatable {
-    let name: String
-    let configDir: String
-    var id: String { configDir }
-
-    /// `.claudewho-personal` → "personal", `.claude` → "claude".
-    static func accountName(forDirectoryNamed dirName: String) -> String {
-        if dirName.hasPrefix(".claudewho-") {
-            let suffix = String(dirName.dropFirst(".claudewho-".count))
-            return suffix.isEmpty ? "claude" : suffix
-        }
-        return String(dirName.drop(while: { $0 == "." }))
-    }
-
-    static func discover(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [UsageAccountConfig] {
-        ConfigDirectoryDiscovery.scan(home: home).map { dir in
-            UsageAccountConfig(name: accountName(forDirectoryNamed: dir.lastPathComponent),
-                               configDir: dir.path)
-        }
-    }
-
-    /// Discovered accounts in the user's preferred order: dirs present in
-    /// `order` first (in that order), newly discovered dirs appended after in
-    /// discovery order. Disabled accounts are kept — Settings still lists them.
-    static func ordered(discovered: [UsageAccountConfig], order: [String]) -> [UsageAccountConfig] {
-        let known = order.compactMap { dir in discovered.first { $0.configDir == dir } }
-        let new = discovered.filter { !order.contains($0.configDir) }
-        return known + new
-    }
-
-    /// The list the poller (and thus the panel and the ESP32) actually uses:
-    /// ordered, minus disabled accounts, with custom names applied. Blank or
-    /// whitespace-only custom names fall back to the derived name.
-    static func resolve(discovered: [UsageAccountConfig],
-                        order: [String],
-                        disabledDirs: Set<String>,
-                        customNames: [String: String]) -> [UsageAccountConfig] {
-        ordered(discovered: discovered, order: order)
-            .filter { !disabledDirs.contains($0.configDir) }
-            .map { account in
-                let custom = customNames[account.configDir]?
-                    .trimmingCharacters(in: .whitespaces) ?? ""
-                return custom.isEmpty ? account
-                    : UsageAccountConfig(name: custom, configDir: account.configDir)
-            }
-    }
-}
-
 /// Display-ready usage for one account. Field names match the JSON the ESP32
 /// firmware expects (same schema the original Python bridge served).
-struct AccountUsage: Codable, Identifiable, Equatable {
+struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
     var name: String
     var status: String // "ok" | "error" | "pending"
     var plan: String = ""
     var sessionPct: Int = -1
     var sessionResets: String = ""
+    var sessionResetsAt: String?
     var weeklyPct: Int = 0
     var weeklyResets: String = ""
+    var weeklyResetsAt: String?
     var modelPct: Int = -1
     var modelResets: String = ""
+    var modelResetsAt: String?
     var modelLabel: String = ""
     var error: String?
 
@@ -72,10 +24,13 @@ struct AccountUsage: Codable, Identifiable, Equatable {
         case name, status, plan, error
         case sessionPct = "session_pct"
         case sessionResets = "session_resets"
+        case sessionResetsAt = "session_resets_at"
         case weeklyPct = "weekly_pct"
         case weeklyResets = "weekly_resets"
+        case weeklyResetsAt = "weekly_resets_at"
         case modelPct = "model_pct"
         case modelResets = "model_resets"
+        case modelResetsAt = "model_resets_at"
         case modelLabel = "model_label"
     }
 }
@@ -83,17 +38,26 @@ struct AccountUsage: Codable, Identifiable, Equatable {
 struct UsageSnapshot: Codable {
     var updatedAt: String?
     var accounts: [AccountUsage]
+    var schemaVersion: Int = 1
 
     enum CodingKeys: String, CodingKey {
         case updatedAt = "updated_at"
         case accounts
+        case schemaVersion = "schema_version"
     }
-}
 
-/// Stored OAuth credentials as Claude Code keeps them in the Keychain.
-struct ClaudeOAuth {
-    var accessToken: String
-    var refreshToken: String
-    var expiresAt: Double // unix ms
-    var subscriptionType: String?
+    init(updatedAt: String?, accounts: [AccountUsage], schemaVersion: Int = 1) {
+        self.updatedAt = updatedAt
+        self.accounts = accounts
+        self.schemaVersion = schemaVersion
+    }
+
+    // Custom decode so JSON written before `schema_version` existed still
+    // decodes (falls back to 1). `encode(to:)` stays synthesized.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        accounts = try container.decode([AccountUsage].self, forKey: .accounts)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+    }
 }

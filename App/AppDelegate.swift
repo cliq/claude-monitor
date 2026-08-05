@@ -2,6 +2,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import WidgetKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let preferences = Preferences()
@@ -23,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var usageBridge: UsageBridgeServer?
     private var usagePanelWindow: UsagePanelWindow?
     private var usageCancellables: Set<AnyCancellable> = []
+    private var lastPublishedAccountsHash: Int?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 1. Single instance guard. Skipped in the test host so a running
@@ -187,11 +189,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                order: prefs.usageAccountOrder,
                                                disabledDirs: prefs.disabledUsageAccountDirs,
                                                customNames: prefs.usageAccountNames)
+                }, publish: { [weak self] snapshot in
+                    guard let self else { return }
+                    UsageSnapshotStore.write(snapshot)
+                    // Only reload the widget's timeline when the render-relevant
+                    // payload actually changed, so a no-op poll doesn't churn it.
+                    var hasher = Hasher()
+                    hasher.combine(snapshot.accounts)
+                    let hash = hasher.finalize()
+                    if hash != self.lastPublishedAccountsHash {
+                        self.lastPublishedAccountsHash = hash
+                        WidgetCenter.shared.reloadTimelines(ofKind: UsageSnapshotStore.widgetKind)
+                    }
                 })
             }
             usagePoller?.start()
         } else {
             usagePoller?.stop()
+            UsageSnapshotStore.clear()
+            lastPublishedAccountsHash = nil
+            WidgetCenter.shared.reloadTimelines(ofKind: UsageSnapshotStore.widgetKind)
         }
         syncUsagePanelVisibility()
 

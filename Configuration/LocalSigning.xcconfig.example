@@ -4,6 +4,8 @@
 // APP_BUNDLE_ID:    A unique bundle identifier you control. Only override if you
 //                   can't use the default com.cliqconsulting.claudemonitor (e.g.
 //                   signing under a personal team).
+// APP_GROUP_ID:     Derives automatically from DEVELOPMENT_TEAM + APP_BUNDLE_ID —
+//                   only override if you changed APP_BUNDLE_ID above.
 
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 APP_BUNDLE_ID = com.yourcompany.claudemonitor

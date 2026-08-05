@@ -1,4 +1,4 @@
-.PHONY: gen test test-integration clean open release install
+.PHONY: gen test test-integration clean open release install release-signed install-signed
 
 RELEASE_APP := build/release/Build/Products/Release/ClaudeMonitor.app
 
@@ -43,7 +43,28 @@ release: gen
 # Quit any running copy, replace /Applications/ClaudeMonitor.app, and relaunch.
 # Because ad-hoc signatures change on every rebuild, the "ClaudeMonitor would like
 # to control Terminal/iTerm2" TCC prompt may reappear after each install.
+# NOTE: the usage widget does NOT work from this install — ad-hoc signatures have
+# no team ID, so the team-prefixed App Group entitlement can't validate and the
+# widget shows its "monitoring off" state. Use `make install-signed` instead.
 install: release
+	pkill -x ClaudeMonitor 2>/dev/null || true
+	rm -rf /Applications/ClaudeMonitor.app
+	cp -R "$(RELEASE_APP)" /Applications/
+	open /Applications/ClaudeMonitor.app
+
+# Build Release with the identity from Configuration/LocalSigning.xcconfig
+# (Apple Development + your DEVELOPMENT_TEAM). Required for the usage widget:
+# the team-prefixed App Group only validates under a real team signature.
+release-signed: gen
+	set -o pipefail && xcodebuild \
+	  -project ClaudeMonitor.xcodeproj \
+	  -scheme ClaudeMonitor \
+	  -configuration Release \
+	  -destination 'platform=macOS' \
+	  -derivedDataPath build/release \
+	  build
+
+install-signed: release-signed
 	pkill -x ClaudeMonitor 2>/dev/null || true
 	rm -rf /Applications/ClaudeMonitor.app
 	cp -R "$(RELEASE_APP)" /Applications/

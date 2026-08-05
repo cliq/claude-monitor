@@ -18,6 +18,7 @@ schemes:
     build:
       targets:
         ClaudeMonitor: all
+        ClaudeMonitorWidget: [build]
         ClaudeMonitorTests: [test]
         ClaudeMonitorIntegrationTests: [test]
         ClaudeMonitorUITests: [test]
@@ -62,12 +63,16 @@ targets:
         # asset-catalog-aware key. Both point at the same name; Finder/Dock use them.
         CFBundleIconFile: AppIcon
         CFBundleIconName: AppIcon
+        AppGroupIdentifier: $(APP_GROUP_ID)
     settings:
       base:
         PRODUCT_NAME: ClaudeMonitor
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: App/ClaudeMonitor.entitlements
+    dependencies:
+      - target: ClaudeMonitorWidget
+        embed: true
   ClaudeMonitorTests:
     type: bundle.unit-test
     platform: macOS
@@ -116,3 +121,29 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).ui-tests
+  ClaudeMonitorWidget:
+    type: app-extension
+    platform: macOS
+    configFiles:
+      Debug: Configuration/Base.xcconfig
+      Release: Configuration/Base.xcconfig
+    sources:
+      - path: Widget
+      - path: App/Models/UsageModels.swift
+      - path: App/Models/RGB.swift
+      - path: App/UI/UsagePalette.swift
+      - path: App/Core/Usage/UsageFormatting.swift
+      - path: App/Core/Usage/UsageSnapshotStore.swift
+    info:
+      path: Widget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDisplayName: Claude Usage
+        AppGroupIdentifier: $(APP_GROUP_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).widget
+        CODE_SIGN_ENTITLEMENTS: Widget/ClaudeMonitorWidget.entitlements
