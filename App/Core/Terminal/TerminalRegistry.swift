@@ -9,6 +9,7 @@ enum TerminalRegistry {
     static let all: [TerminalProvider] = [
         AppleTerminalProvider(),
         ITerm2Provider(),
+        OrcaProvider(),
     ]
 
     static func installed() -> [TerminalProvider] {

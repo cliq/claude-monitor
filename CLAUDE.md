@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting terminal tab. Terminal.app and iTerm2 are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, and Orca are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
 ## Build / test
 
@@ -101,8 +101,8 @@ Hook entries are installed **into the user's Claude config directories**, not th
 
 Click handling goes through `App/Core/Terminal/CompositeTerminalBridge.swift`,
 which fans `focus(tty:expectedPid:)` out across a list of `TerminalProvider`s
-in registry order (`TerminalRegistry.all`). The first provider whose
-AppleScript reports `.focused` wins.
+in registry order (`TerminalRegistry.all`). The first provider that reports
+`.focused` wins.
 
 The composite owns two guards that used to live in `TerminalBridge`:
 
@@ -110,10 +110,18 @@ The composite owns two guards that used to live in `TerminalBridge`:
 2. `kill(expectedPid, 0)` with ESRCH — short-circuit when the Claude process is
    truly gone (macOS recycles `/dev/ttysNNN` when tabs close).
 
-Providers themselves (`AppleTerminalProvider`, `ITerm2Provider`) are thin
-AppleScript wrappers. The third guard — matching on `tty` inside the AppleScript
-— is per-provider because Terminal.app puts `tty` on tabs while iTerm2 puts it
-on sessions.
+`AppleTerminalProvider` and `ITerm2Provider` are thin AppleScript wrappers.
+The third guard — matching on `tty` inside the AppleScript — is per-provider
+because Terminal.app puts `tty` on tabs while iTerm2 puts it on sessions.
+
+`OrcaProvider` (Orca, https://onorca.dev) has no AppleScript path. Orca exports
+`TERM_PROGRAM=Orca` and `ORCA_TERMINAL_HANDLE` into every pty; the provider
+reads the Claude process's environment via `ps eww -p <pid>`, then runs the
+bundled CLI (`Orca.app/Contents/Resources/bin/orca terminal switch --terminal
+<handle>`) and activates the app itself — the CLI selects the tab but never
+raises the window. If the handle is stale (Orca restart) it still activates the
+app and returns `.focused`, because the env already proved no other provider
+can match.
 
 User-disabled terminals come from `preferences.disabledTerminalBundleIDs`
 (Settings: "Terminal applications" section). Disabled-list semantics mean the
