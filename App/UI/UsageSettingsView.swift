@@ -8,6 +8,17 @@ struct UsageSettingsView: View {
     @State private var portText: String = ""
 
     var body: some View {
+        ScrollView {
+            content
+        }
+        .onAppear {
+            accounts = UsageAccountConfig.ordered(discovered: UsageAccountConfig.discover(),
+                                                  order: preferences.usageAccountOrder)
+            portText = String(preferences.usageBridgePort)
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Show Claude usage limits", isOn: $preferences.usageMonitorEnabled)
@@ -26,14 +37,9 @@ struct UsageSettingsView: View {
             bridgeSection
                 .disabled(!preferences.usageMonitorEnabled)
 
-            Spacer(minLength: 0)
         }
         .padding(20)
-        .onAppear {
-            accounts = UsageAccountConfig.ordered(discovered: UsageAccountConfig.discover(),
-                                                  order: preferences.usageAccountOrder)
-            portText = String(preferences.usageBridgePort)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
