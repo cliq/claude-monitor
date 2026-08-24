@@ -45,13 +45,17 @@ Get a phone push every time a session needs your attention or finishes via [Prow
 
 ## Usage limits (optional)
 
-Claude Monitor can also show your Claude Code **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit — for every account it finds. Enable it in **Settings → Usage** and add the Claude config directories whose accounts you want to track.
+Claude Monitor can also show your **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit for every Claude Code account it finds, plus rate-limit windows and monthly spend allowances for OpenAI Codex accounts. Enable it in **Settings → Usage** and pick the accounts you want to track.
 
 <p align="center">
   <img src="docs/images/usage-panel.png" alt="Claude Usage panel showing session, weekly, and Fable limits for three accounts" width="440" />
 </p>
 
-The app reads each account's OAuth token from the Keychain (the same credentials Claude Code stores) and polls `https://api.anthropic.com/api/oauth/usage` every 180 seconds. Refreshed tokens are written back, so tracking an account here keeps it logged in — it never signs you out of Claude Code. Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns.
+For Claude accounts the app reads each account's OAuth token from the Keychain (the same credentials Claude Code stores) and polls `https://api.anthropic.com/api/oauth/usage` every 180 seconds. Refreshed tokens are written back, so tracking an account here keeps it logged in — it never signs you out of Claude Code.
+
+For Codex accounts (`~/.codex` and `~/.codexwho-*`) the app asks the Codex CLI itself via a short-lived `codex app-server` process — it never reads, refreshes, or copies Codex credentials. This requires the `codex` CLI on your machine and a ChatGPT sign-in (API-key logins are billed separately and expose no plan limits).
+
+Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns.
 
 The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below.
 

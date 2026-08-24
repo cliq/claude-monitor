@@ -30,9 +30,25 @@ extension UsageSnapshot {
             weeklyPct: 66,
             weeklyResets: "Mon 00:00"
         )
+        let codex = AccountUsage(
+            provider: .codex,
+            name: "codex",
+            status: "ok",
+            plan: "PLUS",
+            weeklyPct: 25,
+            weeklyResets: "Thu 08:00",
+            modelPct: 6,
+            modelResets: "Mon 00:00",
+            modelLabel: "MONTHLY",
+            metrics: [
+                UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 25, resets: "Thu 08:00"),
+                UsageMetric(id: "individual", label: "MONTHLY", usedPct: 6,
+                            resets: "Mon 00:00", detail: "125 / 2000"),
+            ]
+        )
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return UsageSnapshot(updatedAt: formatter.string(from: .now), accounts: [personal, work])
+        return UsageSnapshot(updatedAt: formatter.string(from: .now), accounts: [personal, work, codex])
     }
 }
 

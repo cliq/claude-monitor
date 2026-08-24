@@ -1,27 +1,48 @@
 import Foundation
 
-/// One Claude Code login to poll usage for: a config directory plus the short
-/// name shown on the dashboard/panel. Derived from `ConfigDirectoryDiscovery`
-/// rather than configured by hand.
-struct UsageAccountConfig: Identifiable, Equatable {
+/// One agent-CLI login to poll usage for: a provider, a config directory, and
+/// the short name shown on the dashboard/panel. Derived from
+/// `ConfigDirectoryDiscovery` rather than configured by hand.
+struct UsageAccountConfig: Identifiable, Equatable, Sendable {
+    let provider: AgentProvider
     let name: String
     let configDir: String
-    var id: String { configDir }
 
-    /// `.claudewho-personal` → "personal", `.claude` → "claude".
+    /// Provider-qualified so a Claude and a Codex account with the same
+    /// display name never collide. Preferences stay keyed by `configDir`
+    /// alone — those paths are already distinct across providers.
+    var id: String { "\(provider.rawValue):\(configDir)" }
+
+    init(provider: AgentProvider = .claude, name: String, configDir: String) {
+        self.provider = provider
+        self.name = name
+        self.configDir = configDir
+    }
+
+    /// `.claudewho-personal` → "personal", `.claude` → "claude",
+    /// `.codexwho-work` → "work", `.codex` → "codex".
     static func accountName(forDirectoryNamed dirName: String) -> String {
-        if dirName.hasPrefix(".claudewho-") {
-            let suffix = String(dirName.dropFirst(".claudewho-".count))
-            return suffix.isEmpty ? "claude" : suffix
+        for (prefix, fallback) in [(".claudewho-", "claude"), (".codexwho-", "codex")] {
+            if dirName.hasPrefix(prefix) {
+                let suffix = String(dirName.dropFirst(prefix.count))
+                return suffix.isEmpty ? fallback : suffix
+            }
         }
         return String(dirName.drop(while: { $0 == "." }))
     }
 
     static func discover(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [UsageAccountConfig] {
-        ConfigDirectoryDiscovery.scan(home: home).map { dir in
-            UsageAccountConfig(name: accountName(forDirectoryNamed: dir.lastPathComponent),
+        let claude = ConfigDirectoryDiscovery.scan(home: home).map { dir in
+            UsageAccountConfig(provider: .claude,
+                               name: accountName(forDirectoryNamed: dir.lastPathComponent),
                                configDir: dir.path)
         }
+        let codex = ConfigDirectoryDiscovery.scanCodex(home: home).map { dir in
+            UsageAccountConfig(provider: .codex,
+                               name: accountName(forDirectoryNamed: dir.lastPathComponent),
+                               configDir: dir.path)
+        }
+        return claude + codex
     }
 
     /// Discovered accounts in the user's preferred order: dirs present in
@@ -46,7 +67,8 @@ struct UsageAccountConfig: Identifiable, Equatable {
                 let custom = customNames[account.configDir]?
                     .trimmingCharacters(in: .whitespaces) ?? ""
                 return custom.isEmpty ? account
-                    : UsageAccountConfig(name: custom, configDir: account.configDir)
+                    : UsageAccountConfig(provider: account.provider, name: custom,
+                                         configDir: account.configDir)
             }
     }
 }

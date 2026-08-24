@@ -134,6 +134,7 @@ targets:
     sources:
       - path: Widget
       - path: App/Models/UsageModels.swift
+      - path: App/Models/AgentProvider.swift
       - path: App/Models/RGB.swift
       - path: App/UI/UsagePalette.swift
       - path: App/Core/Usage/UsageFormatting.swift

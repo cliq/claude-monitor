@@ -48,12 +48,13 @@ struct DirectoriesSettingsView: View {
                 .foregroundStyle(.secondary)
 
             directoryList(codexDirectoriesWithStatus,
-                          emptyLabel: "No Codex directories found under your home folder.",
+                          emptyLabel: "No Codex directories in the list — use Redetect Codex or Add Codex Directory.",
                           install: { installCodex($0.url) },
                           uninstall: { uninstallCodex($0) },
                           remove: { removeCodex($0) })
 
             HStack {
+                Button("Add Codex Directory…") { addCodexDirectory() }
                 Button("Redetect Codex") { redetectCodex() }
                 Spacer()
             }
@@ -284,6 +285,20 @@ struct DirectoriesSettingsView: View {
             guard confirmRemove(entry, hooksFileName: "hooks.json") else { return }
         }
         preferences.managedCodexDirectoryPaths.removeAll { $0 == entry.url.path }
+        refresh()
+    }
+
+    private func addCodexDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true   // Codex config dirs start with `.`
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if !preferences.managedCodexDirectoryPaths.contains(url.path) {
+            preferences.managedCodexDirectoryPaths.append(url.path)
+        }
         refresh()
     }
 

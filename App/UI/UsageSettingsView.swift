@@ -21,9 +21,9 @@ struct UsageSettingsView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Claude usage limits", isOn: $preferences.usageMonitorEnabled)
+                Toggle("Show usage limits", isOn: $preferences.usageMonitorEnabled)
                     .font(.headline)
-                Text("Polls Anthropic's usage endpoint every 3 minutes for each logged-in Claude Code account, using the OAuth credentials Claude Code keeps in the Keychain. Refreshed tokens are written back, so Claude Code stays logged in.")
+                Text("Polls each enabled account every 3 minutes. Claude Code accounts use Anthropic's usage endpoint with the OAuth credentials Claude Code keeps in the Keychain — refreshed tokens are written back, so Claude Code stays logged in. Codex accounts are read through the Codex CLI's local app-server; their credentials are never read. Codex usage requires a ChatGPT sign-in (API-key logins are billed separately and have no plan limits).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -47,7 +47,7 @@ struct UsageSettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Accounts").font(.subheadline.weight(.semibold))
             if accounts.isEmpty {
-                Text("No Claude Code config directories found in your home folder.")
+                Text("No Claude Code or Codex config directories found in your home folder.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -80,6 +80,12 @@ struct UsageSettingsView: View {
             TextField(account.name, text: nameBinding(for: account))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 140)
+            Text(account.provider.displayName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(.quaternary))
             Text(account.configDir)
                 .font(.caption)
                 .foregroundStyle(.secondary)

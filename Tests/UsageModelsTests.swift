@@ -204,6 +204,127 @@ final class UsageModelsTests: XCTestCase {
         let snapshot = UsageSnapshot(updatedAt: "2026-07-19T12:00:00Z", accounts: [])
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as! [String: Any]
 
-        XCTAssertEqual(json["schema_version"] as? Int, 1)
+        XCTAssertEqual(json["schema_version"] as? Int, 2)
+    }
+
+    // MARK: - Provider-aware accounts (schema v2)
+
+    func test_accountName_stripsCodexwhoPrefix() {
+        XCTAssertEqual(UsageAccountConfig.accountName(forDirectoryNamed: ".codexwho-work"), "work")
+        XCTAssertEqual(UsageAccountConfig.accountName(forDirectoryNamed: ".codex"), "codex")
+        XCTAssertEqual(UsageAccountConfig.accountName(forDirectoryNamed: ".codexwho-"), "codex")
+    }
+
+    func test_discover_findsClaudeAndCodexAccounts() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UsageModelsTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let claudeDir = home.appendingPathComponent(".claude")
+        try FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: claudeDir.appendingPathComponent("settings.json"))
+
+        let codexDir = home.appendingPathComponent(".codexwho-work")
+        try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
+        try Data().write(to: codexDir.appendingPathComponent("config.toml"))
+
+        let accounts = UsageAccountConfig.discover(home: home)
+        XCTAssertEqual(accounts.map(\.provider), [.claude, .codex])
+        XCTAssertEqual(accounts.map(\.name), ["claude", "work"])
+    }
+
+    func test_accountConfigID_isProviderQualified() {
+        let claude = UsageAccountConfig(provider: .claude, name: "work", configDir: "/h/.claudewho-work")
+        let codex = UsageAccountConfig(provider: .codex, name: "work", configDir: "/h/.codexwho-work")
+        XCTAssertNotEqual(claude.id, codex.id)
+        XCTAssertTrue(claude.id.hasPrefix("claude:"))
+        XCTAssertTrue(codex.id.hasPrefix("codex:"))
+    }
+
+    func test_resolve_preservesProviderWhenRenaming() {
+        let codex = UsageAccountConfig(provider: .codex, name: "codex", configDir: "/h/.codex")
+        let out = UsageAccountConfig.resolve(discovered: [codex], order: [],
+                                             disabledDirs: [],
+                                             customNames: ["/h/.codex": "gpt"])
+        XCTAssertEqual(out.first?.provider, .codex)
+        XCTAssertEqual(out.first?.name, "gpt")
+    }
+
+    func test_accountUsageID_isProviderQualified() {
+        let claude = AccountUsage(name: "work", status: "ok")
+        let codex = AccountUsage(provider: .codex, name: "work", status: "ok")
+        XCTAssertNotEqual(claude.id, codex.id)
+    }
+
+    func test_decode_v1AccountWithoutProviderOrMetrics_defaultsToClaude() throws {
+        let json = """
+        {"name": "personal", "status": "ok", "plan": "MAX",
+         "session_pct": 43, "session_resets": "23:50",
+         "weekly_pct": 12, "weekly_resets": "Fri 12:00",
+         "model_pct": 7, "model_resets": "Sat 09:00", "model_label": "FABLE"}
+        """
+        let account = try JSONDecoder().decode(AccountUsage.self, from: Data(json.utf8))
+        XCTAssertEqual(account.provider, .claude)
+        XCTAssertTrue(account.metrics.isEmpty)
+    }
+
+    func test_decode_unknownProviderFallsBackToClaude() throws {
+        let json = """
+        {"name": "x", "status": "ok", "provider": "gemini"}
+        """
+        let account = try JSONDecoder().decode(AccountUsage.self, from: Data(json.utf8))
+        XCTAssertEqual(account.provider, .claude)
+    }
+
+    func test_displayMetrics_fallsBackToLegacyTrio() {
+        var account = AccountUsage(name: "personal", status: "ok")
+        account.sessionPct = 43
+        account.sessionResets = "23:50"
+        account.weeklyPct = 12
+        account.modelPct = 7
+        account.modelLabel = "FABLE"
+
+        let metrics = account.displayMetrics
+        XCTAssertEqual(metrics.map(\.label), ["SESSION", "WEEKLY", "FABLE"])
+        XCTAssertEqual(metrics.map(\.usedPct), [43, 12, 7])
+    }
+
+    func test_displayMetrics_prefersExplicitMetrics() {
+        var account = AccountUsage(provider: .codex, name: "codex", status: "ok")
+        account.metrics = [UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 25)]
+        XCTAssertEqual(account.displayMetrics.map(\.label), ["WEEKLY"])
+    }
+
+    func test_encode_accountUsage_addsProviderAndMetricsAdditively() throws {
+        var account = AccountUsage(provider: .codex, name: "codex", status: "ok")
+        account.weeklyPct = 25
+        account.metrics = [UsageMetric(id: "individual", label: "MONTHLY", usedPct: 6,
+                                       resets: "Mon 00:00", resetsAt: "2026-09-01T00:00:00Z",
+                                       detail: "125 / 2000")]
+
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(account)) as! [String: Any]
+
+        // Every legacy firmware key still present.
+        for key in ["name", "status", "plan", "session_pct", "session_resets",
+                    "weekly_pct", "weekly_resets", "model_pct", "model_resets", "model_label"] {
+            XCTAssertNotNil(json[key], "missing legacy key \(key)")
+        }
+        XCTAssertEqual(json["provider"] as? String, "codex")
+        let metrics = json["metrics"] as? [[String: Any]]
+        XCTAssertEqual(metrics?.first?["label"] as? String, "MONTHLY")
+        XCTAssertEqual(metrics?.first?["used_pct"] as? Int, 6)
+        XCTAssertEqual(metrics?.first?["detail"] as? String, "125 / 2000")
+    }
+
+    func test_roundTrip_mixedProviderAccountsThroughSnapshot() throws {
+        let claude = AccountUsage(name: "personal", status: "ok", plan: "MAX", sessionPct: 43)
+        var codex = AccountUsage(provider: .codex, name: "codex", status: "ok", plan: "TEAM")
+        codex.metrics = [UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 25,
+                                     resets: "Thu 08:00", resetsAt: "2026-08-27T08:00:00Z")]
+        let snapshot = UsageSnapshot(updatedAt: "2026-08-24T12:00:00Z", accounts: [claude, codex])
+
+        let decoded = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(decoded.schemaVersion, 2)
+        XCTAssertEqual(decoded.accounts, [claude, codex])
     }
 }

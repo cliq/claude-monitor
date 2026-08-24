@@ -23,7 +23,7 @@ struct UsagePanelView: View {
     }
 
     private var emptyState: some View {
-        Text(poller.updatedAt == nil ? "loading usage..." : "no Claude Code accounts found")
+        Text(poller.updatedAt == nil ? "loading usage..." : "no usage accounts found")
             .font(.system(size: 12))
             .foregroundStyle(UsagePalette.muted)
             .padding(.vertical, 40)
@@ -61,6 +61,15 @@ struct UsagePanelView: View {
 private struct UsageAccountRow: View {
     let account: AccountUsage
 
+    private static let metricsPerRow = 3
+
+    private var metricRows: [[UsageMetric]] {
+        let metrics = account.displayMetrics
+        return stride(from: 0, to: metrics.count, by: Self.metricsPerRow).map {
+            Array(metrics[$0..<min($0 + Self.metricsPerRow, metrics.count)])
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -68,6 +77,13 @@ private struct UsageAccountRow: View {
                     .font(.system(size: 13, weight: .semibold))
                     .kerning(1.8)
                     .foregroundStyle(UsagePalette.name)
+                Text(account.provider.displayName.uppercased())
+                    .font(.system(size: 8, weight: .semibold))
+                    .kerning(1.0)
+                    .foregroundStyle(UsagePalette.muted)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(UsagePalette.line, lineWidth: 1))
                 Text(account.plan)
                     .font(.system(size: 9, weight: .medium))
                     .kerning(1.1)
@@ -79,11 +95,16 @@ private struct UsageAccountRow: View {
                         .lineLimit(1)
                 }
             }
-            HStack(alignment: .top, spacing: 22) {
-                UsageMetricCell(label: "SESSION", pct: account.sessionPct, resets: account.sessionResets)
-                UsageMetricCell(label: "WEEKLY", pct: account.weeklyPct, resets: account.weeklyResets)
-                UsageMetricCell(label: account.modelLabel.isEmpty ? "MODEL" : account.modelLabel,
-                                pct: account.modelPct, resets: account.modelResets)
+            ForEach(Array(metricRows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: 22) {
+                    ForEach(row) { metric in
+                        UsageMetricCellView(metric: metric)
+                    }
+                    // Pad short rows so cell widths stay consistent.
+                    ForEach(0..<(Self.metricsPerRow - row.count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                    }
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -92,10 +113,10 @@ private struct UsageAccountRow: View {
     }
 }
 
-private struct UsageMetricCell: View {
-    let label: String
-    let pct: Int
-    let resets: String
+private struct UsageMetricCellView: View {
+    let metric: UsageMetric
+
+    private var pct: Int { metric.usedPct }
 
     private var barColor: Color {
         pct >= 85 ? UsagePalette.crit : pct >= 60 ? UsagePalette.warn : UsagePalette.sand
@@ -104,12 +125,23 @@ private struct UsageMetricCell: View {
         pct < 0 ? UsagePalette.idle : pct >= 85 ? UsagePalette.crit : pct >= 60 ? UsagePalette.warn : UsagePalette.text
     }
 
+    private var footer: String {
+        if pct < 0 { return "idle" }
+        return [metric.resets, metric.detail ?? ""]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
+            Text(metric.label)
                 .font(.system(size: 9, weight: .medium))
                 .kerning(1.3)
                 .foregroundStyle(UsagePalette.muted)
+                .lineLimit(1)
+                // Long named-bucket labels end in the distinguishing duration
+                // suffix ("… 5H" vs "… 7D") — keep the tail, drop the head.
+                .truncationMode(.head)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(pct < 0 ? "-" : "\(pct)")
                     .font(.system(size: 34, weight: .semibold))
@@ -131,9 +163,10 @@ private struct UsageMetricCell: View {
                 }
             }
             .frame(height: 5)
-            Text(pct < 0 ? "idle" : resets)
+            Text(footer)
                 .font(.system(size: 11))
                 .foregroundStyle(pct < 0 ? UsagePalette.idle : UsagePalette.reset)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

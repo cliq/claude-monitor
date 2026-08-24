@@ -48,10 +48,18 @@ Events are decoded on the server's private queue, then dispatched onto the main 
 ### Usage-limits pipeline (opt-in, Settings → Usage)
 
 ```
-ClaudeCodeKeychain (Claude Code's "Claude Code-credentials-<sha256(configDir)[:8]>" items)
-  → UsagePoller — polls https://api.anthropic.com/api/oauth/usage every 180s
-    per account discovered by ConfigDirectoryDiscovery; refreshes OAuth tokens
-    and writes them back so Claude Code stays logged in
+UsageAccountConfig.discover() — Claude dirs via ConfigDirectoryDiscovery.scan(),
+    Codex dirs via scanCodex(); provider-tagged accounts
+  → UsagePoller (@MainActor: timer, ordering, updatedAt, publish) — every 180s
+    dispatches per provider to a UsageFetching impl; per-account error isolation
+      .claude → ClaudeUsageFetcher — ClaudeCodeKeychain (Claude Code's
+        "Claude Code-credentials-<sha256(configDir)[:8]>" items) +
+        https://api.anthropic.com/api/oauth/usage; refreshes OAuth tokens and
+        writes them back so Claude Code stays logged in
+      .codex → CodexUsageFetcher — CodexAppServerClient launches a short-lived
+        `codex app-server --listen stdio://` with CODEX_HOME=<configDir>,
+        calls account/rateLimits/read (JSONL, 10s timeout), maps via
+        CodexUsageMapper; never reads/refreshes Codex credentials
   → UsagePanelView (menu bar → "Open Usage Panel")
   → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
     the ESP32 desk panel (esp32-claude-monitor firmware)
@@ -61,7 +69,9 @@ ClaudeCodeKeychain (Claude Code's "Claude Code-credentials-<sha256(configDir)[:8
     reads the snapshot file, WidgetCenter reloads are triggered by the app
 ```
 
-The usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses **and** the widget's snapshot file — never rename or remove keys, additive changes only (`*_resets_at` and `schema_version` were added this way; the firmware's per-key parser ignores unknown keys). `UsagePoller.summarize`/`formatReset` forward to the pure statics in `UsageFormat` (`App/Core/Usage/UsageFormatting.swift`); keep all of them `nonisolated` pure for the tests.
+The Anthropic usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses **and** the widget's snapshot file — never rename or remove keys, additive changes only (`*_resets_at`, `schema_version`, and the v2 `provider`/`metrics` keys were added this way; the firmware's per-key parser ignores unknown keys). `UsagePoller.summarize`/`formatReset` forward to the pure statics in `UsageFormat` (`App/Core/Usage/UsageFormatting.swift`); keep all of them (and `CodexUsageMapper`) `nonisolated` pure for the tests.
+
+Codex specifics: `AccountUsage.metrics` (`[UsageMetric]`) is the authoritative list the panel/widget render (`displayMetrics` falls back to the legacy session/weekly/model trio for Claude accounts and schema-v1 snapshots); the flat `session_*`/`weekly_*`/`model_*` fields are populated as an adapter (shortest ordinary window → session, ~7-day window → weekly, monthly/individual spend limit → model). `CodexUsageMapper` labels windows from `limitName` or duration only — `MONTHLY` requires a month-boundary reset (else `INDIVIDUAL`), other durations get neutral labels like `30D`, never guessed product names. The app-server response is read via `CodexResponseAccumulator` (fragmented-line/notification/ID-correlation tolerant — tested without spawning processes); stderr and error strings are capped, stdout is never logged wholesale, and the monitor must never redeem Codex reset credits. Codex usage needs a ChatGPT sign-in; API-key logins surface an actionable per-account error. `AccountUsage.id` and `UsageAccountConfig.id` are provider-qualified (same display name across providers must not collide), while preferences stay keyed by `configDir`. An opt-in integration smoke test runs the real CLI: `TEST_RUNNER_CODEX_USAGE_INTEGRATION=1` + `-only-testing:ClaudeMonitorTests/CodexUsageTests`.
 
 ### Usage widget
 
@@ -70,7 +80,7 @@ The widget never polls or touches the keychain: it renders the last `UsageSnapsh
 - The App Group is team-prefixed: `APP_GROUP_ID = $(DEVELOPMENT_TEAM).com.cliqconsulting.claudemonitor` in `Configuration/Base.xcconfig`, surfaced to code via the `AppGroupIdentifier` Info.plist key on both targets. Team-prefixed groups are authorized by the code signature alone — no provisioning profile needed for Developer ID, no macOS 15 TCC prompt.
 - Everything in `UsageSnapshotStore` is nil-safe by design: with an empty `DEVELOPMENT_TEAM` (contributors without signing) or an ad-hoc signature the group container is unavailable and the publish path silently no-ops — the app, panel, ESP32 bridge, and `make test` must keep working.
 - **Ad-hoc builds cannot exercise the widget** (`make install` signs with `CODE_SIGN_IDENTITY=-`; no team ID → the group entitlement doesn't validate). Test widgets from a team-signed build installed in `/Applications` — widget registration is path-sensitive, and a DerivedData copy makes `pluginkit` register a stale path so `WidgetCenter` reloads appear to do nothing.
-- Files shared into the widget target are listed explicitly in `project.yml` (`UsageModels`, `RGB`, `UsagePalette`, `UsageFormatting`, `UsageSnapshotStore`). They must stay Foundation/SwiftUI-pure: no AppKit windows, keychain, discovery, or `Bundle.main` resource lookups. The widget kind string `"UsageWidget"` (`UsageSnapshotStore.widgetKind`) must never change — it's how the app targets reloads and how macOS tracks placed widgets.
+- Files shared into the widget target are listed explicitly in `project.yml` (`UsageModels`, `AgentProvider`, `RGB`, `UsagePalette`, `UsageFormatting`, `UsageSnapshotStore`). They must stay Foundation/SwiftUI-pure: no AppKit windows, keychain, discovery, or `Bundle.main` resource lookups. The widget kind string `"UsageWidget"` (`UsageSnapshotStore.widgetKind`) must never change — it's how the app targets reloads and how macOS tracks placed widgets.
 - Widget views must derive "now" from `entry.date`, never `Date()`, so archived timeline entries render honestly; staleness threshold is the shared `UsageFormat.staleAfter` (= `UsagePoller.pollInterval * 3`).
 
 ### Update checks
@@ -95,7 +105,7 @@ Hook entries are installed **into the user's Claude config directories**, not th
 
 Codex CLI sessions flow through the same pipeline via `scripts/codex-hook.sh` (installed to `~/.claude-monitor/codex-hook.sh`), which **normalizes** Codex events into the existing closed vocabulary before POSTing: `PermissionRequest` becomes `Notification` with `notification_type=permission_prompt`, so `StateMachine` and `PushNotifier` have zero Codex-specific code. Session IDs are namespaced `codex:<uuid>` in the script (Claude IDs stay raw — no migration), and the payload carries `provider: "codex"`; `HookEvent`/`Session` decode a missing `provider` as `.claude`. The script must never write to stdout (Codex would read JSON from a `PermissionRequest` hook as an allow/deny decision) and must not use apostrophes inside its python heredoc (macOS bash 3.2 quote-scans heredoc content inside `$(...)`).
 
-`HookInstaller`'s `codexKind` targets `<configDir>/hooks.json` (marker files `config.toml`/`auth.json` via `ConfigDirectoryDiscovery.scanCodex`; dirs named `.codex`/`.codexwho-*`), keeps entries schema-minimal (no matcher/sidecar keys — ownership is the arg-encoded command tag only), pins `timeout: 3` on `SessionEnd` (Codex kills those hooks after 1s by default, 3s max), and backs up to `hooks.json.claude-monitor.bak` because other tools (Orca) already own `hooks.json.bak`. Foreign entries in `hooks.json` must survive install/uninstall — see `Tests/Fixtures/codex-hooks-with-foreign-entries.json`. After installation Codex requires the user to trust the hooks via `/hooks` (trust is recorded against the hook definition's hash, so changing the command string re-triggers review); the settings UI surfaces this. `scanCodex` is deliberately separate from `scan()` — Claude-only consumers (`UsageAccountConfig`) must never see Codex dirs.
+`HookInstaller`'s `codexKind` targets `<configDir>/hooks.json` (marker files `config.toml`/`auth.json` via `ConfigDirectoryDiscovery.scanCodex`; dirs named `.codex`/`.codexwho-*`), keeps entries schema-minimal (no matcher/sidecar keys — ownership is the arg-encoded command tag only), pins `timeout: 3` on `SessionEnd` (Codex kills those hooks after 1s by default, 3s max), and backs up to `hooks.json.claude-monitor.bak` because other tools (Orca) already own `hooks.json.bak`. Foreign entries in `hooks.json` must survive install/uninstall — see `Tests/Fixtures/codex-hooks-with-foreign-entries.json`. After installation Codex requires the user to trust the hooks via `/hooks` (trust is recorded against the hook definition's hash, so changing the command string re-triggers review); the settings UI surfaces this. `scanCodex` is deliberately separate from `scan()` — Claude-only consumers must never see Codex dirs (`UsageAccountConfig.discover()` combines both on purpose, tagging each account with its provider).
 
 ### Hook schema versioning
 

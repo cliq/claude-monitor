@@ -37,14 +37,14 @@ struct UsageWidgetView: View {
         switch family {
         case .systemSmall:
             if let account = snapshot.accounts.first {
-                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: true, metrics: [.session, .weekly])
+                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: true, maxMetrics: 2)
                     .padding(12)
             } else {
                 emptyState
             }
         case .systemMedium:
             if let account = snapshot.accounts.first {
-                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: false, metrics: [.session, .weekly, .model])
+                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: false, maxMetrics: 3)
                     .padding(14)
             } else {
                 emptyState
@@ -61,7 +61,7 @@ struct UsageWidgetView: View {
                             now: entry.date,
                             isStale: isStale,
                             compact: false,
-                            metrics: [.session, .weekly, .model]
+                            maxMetrics: 3
                         )
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -104,17 +104,15 @@ struct UsageWidgetView: View {
     }
 }
 
-private enum UsageMetricKind {
-    case session, weekly, model
-}
-
 private struct UsageAccountBlock: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
     let account: AccountUsage
     let now: Date
     let isStale: Bool
     let compact: Bool
-    let metrics: [UsageMetricKind]
+    /// How many prioritized metrics fit this family. `displayMetrics` is
+    /// already priority-ordered (session, weekly, monthly/individual, extras).
+    let maxMetrics: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
@@ -138,28 +136,12 @@ private struct UsageAccountBlock: View {
                     .lineLimit(1)
             }
             HStack(alignment: .top, spacing: compact ? 10 : 14) {
-                ForEach(Array(metrics.enumerated()), id: \.offset) { _, kind in
-                    metricCell(for: kind)
+                ForEach(account.displayMetrics.prefix(maxMetrics)) { metric in
+                    UsageMetricCell(label: metric.label, pct: metric.usedPct,
+                                    resetLabel: resetLabel(iso: metric.resetsAt, fallback: metric.resets),
+                                    isStale: isStale)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func metricCell(for kind: UsageMetricKind) -> some View {
-        switch kind {
-        case .session:
-            UsageMetricCell(label: "SESSION", pct: account.sessionPct,
-                             resetLabel: resetLabel(iso: account.sessionResetsAt, fallback: account.sessionResets),
-                             isStale: isStale)
-        case .weekly:
-            UsageMetricCell(label: "WEEKLY", pct: account.weeklyPct,
-                             resetLabel: resetLabel(iso: account.weeklyResetsAt, fallback: account.weeklyResets),
-                             isStale: isStale)
-        case .model:
-            UsageMetricCell(label: account.modelLabel.isEmpty ? "MODEL" : account.modelLabel, pct: account.modelPct,
-                             resetLabel: resetLabel(iso: account.modelResetsAt, fallback: account.modelResets),
-                             isStale: isStale)
         }
     }
 
@@ -207,6 +189,10 @@ private struct UsageMetricCell: View {
                 .font(.system(size: 7, weight: .medium))
                 .kerning(1.0)
                 .foregroundStyle(UsagePalette.muted)
+                .lineLimit(1)
+                // Keep the tail — named-bucket labels differ in their
+                // trailing duration suffix ("… 5H" vs "… 7D").
+                .truncationMode(.head)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(pct < 0 ? "-" : "\(pct)")
                     .font(.system(size: valueSize, weight: .semibold))
