@@ -11,6 +11,9 @@ enum HookInstaller {
     /// field is schema-defined and survives those rewrites, so the version is encoded there.
     static let currentVersion = 3
 
+    /// Codex-hook schema version, independent of the Claude `currentVersion` lineage.
+    static let codexCurrentVersion = 1
+
     private struct Kind {
         let managedValue: String
         /// Substring matched against the full command string to identify entries we own
@@ -22,6 +25,18 @@ enum HookInstaller {
         let scriptRelativePath: String
         let hooks: [String]
         let currentVersion: Int
+        /// File inside the config dir holding the hooks object under a root "hooks" key —
+        /// Claude Code's settings.json and Codex's hooks.json share that shape.
+        var settingsFileName: String = "settings.json"
+        /// Suffix appended to the settings file name for the rolling backup. Codex kinds
+        /// must not use plain "bak": other tools already own hooks.json.bak.
+        var backupSuffix: String = "bak"
+        /// Per-event "timeout" (seconds) written into the inner hook entry. Codex kills
+        /// SessionEnd hooks after 1s by default (3s max), so that entry pins timeout: 3.
+        var hookTimeouts: [String: Int] = [:]
+        /// Claude's schema carries a "matcher" plus our sidecar keys; Codex entries stay
+        /// minimal so its trust hashing and parser only see schema-defined fields.
+        var writesClaudeEntryShape: Bool = true
     }
 
     private static let mainKind = Kind(
@@ -38,6 +53,18 @@ enum HookInstaller {
         scriptRelativePath: ".claude-monitor/offline-prowl.sh",
         hooks: ["Stop", "Notification"],
         currentVersion: 1
+    )
+
+    private static let codexKind = Kind(
+        managedValue: "claude-monitor",
+        scriptPathMarker: ".claude-monitor/codex-hook.sh",
+        scriptRelativePath: ".claude-monitor/codex-hook.sh",
+        hooks: ["SessionStart", "UserPromptSubmit", "Stop", "PermissionRequest", "SessionEnd"],
+        currentVersion: HookInstaller.codexCurrentVersion,
+        settingsFileName: "hooks.json",
+        backupSuffix: "claude-monitor.bak",
+        hookTimeouts: ["SessionEnd": 3],
+        writesClaudeEntryShape: false
     )
 
     private static let managedKey = "_managedBy"
@@ -76,10 +103,24 @@ enum HookInstaller {
         try uninstall(configDir: configDir, kind: offlineKind)
     }
 
+    // MARK: Public API — Codex hook (targets <configDir>/hooks.json)
+
+    static func inspectCodexHook(configDir: URL) throws -> Status {
+        try inspect(configDir: configDir, kind: codexKind)
+    }
+
+    static func installCodexHook(configDir: URL) throws {
+        try install(configDir: configDir, kind: codexKind)
+    }
+
+    static func uninstallCodexHook(configDir: URL) throws {
+        try uninstall(configDir: configDir, kind: codexKind)
+    }
+
     // MARK: Implementation
 
     private static func inspect(configDir: URL, kind: Kind) throws -> Status {
-        let settingsURL = configDir.appendingPathComponent("settings.json")
+        let settingsURL = configDir.appendingPathComponent(kind.settingsFileName)
         guard FileManager.default.fileExists(atPath: settingsURL.path) else {
             return Status(status: .notInstalled, installedVersion: 0)
         }
@@ -119,32 +160,35 @@ enum HookInstaller {
     }
 
     private static func install(configDir: URL, kind: Kind) throws {
-        let settingsURL = configDir.appendingPathComponent("settings.json")
+        let settingsURL = configDir.appendingPathComponent(kind.settingsFileName)
         var json = (try? loadJson(settingsURL)) ?? [:]
         var hooks = (json["hooks"] as? [String: Any]) ?? [:]
 
         for hook in kind.hooks {
             var entries = (hooks[hook] as? [[String: Any]]) ?? []
             entries.removeAll(where: { isOurs($0, kind: kind) })
-            let command: [String: Any] = [
+            var command: [String: Any] = [
                 "type": "command",
                 "command": expectedCommand(for: hook, kind: kind),
             ]
-            let managed: [String: Any] = [
-                managedKey: kind.managedValue,
-                versionKey: kind.currentVersion,
-                "matcher": "",
-                "hooks": [command],
-            ]
+            if let timeout = kind.hookTimeouts[hook] {
+                command["timeout"] = timeout
+            }
+            var managed: [String: Any] = ["hooks": [command]]
+            if kind.writesClaudeEntryShape {
+                managed[managedKey] = kind.managedValue
+                managed[versionKey] = kind.currentVersion
+                managed["matcher"] = ""
+            }
             entries.append(managed)
             hooks[hook] = entries
         }
         json["hooks"] = hooks
-        try saveJson(json, to: settingsURL)
+        try saveJson(json, to: settingsURL, backupSuffix: kind.backupSuffix)
     }
 
     private static func uninstall(configDir: URL, kind: Kind) throws {
-        let settingsURL = configDir.appendingPathComponent("settings.json")
+        let settingsURL = configDir.appendingPathComponent(kind.settingsFileName)
         guard FileManager.default.fileExists(atPath: settingsURL.path) else { return }
         var json = try loadJson(settingsURL)
         guard var hooks = json["hooks"] as? [String: Any] else { return }
@@ -163,7 +207,7 @@ enum HookInstaller {
         } else {
             json["hooks"] = hooks
         }
-        try saveJson(json, to: settingsURL)
+        try saveJson(json, to: settingsURL, backupSuffix: kind.backupSuffix)
     }
 
     // MARK: Helpers
@@ -206,10 +250,11 @@ enum HookInstaller {
         return (obj as? [String: Any]) ?? [:]
     }
 
-    private static func saveJson(_ json: [String: Any], to url: URL) throws {
+    private static func saveJson(_ json: [String: Any], to url: URL, backupSuffix: String) throws {
         let fm = FileManager.default
         if fm.fileExists(atPath: url.path) {
-            let backup = url.appendingPathExtension("bak")
+            let backup = url.deletingLastPathComponent()
+                .appendingPathComponent(url.lastPathComponent + "." + backupSuffix)
             _ = try? fm.removeItem(at: backup)
             try? fm.copyItem(at: url, to: backup)
         }

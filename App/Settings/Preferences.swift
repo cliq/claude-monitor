@@ -10,6 +10,11 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(managedConfigDirectoryPaths, forKey: Self.configDirsKey) }
     }
 
+    /// Codex config directories (e.g. ~/.codex) whose hooks.json Claude Monitor manages.
+    @Published var managedCodexDirectoryPaths: [String] {
+        didSet { defaults.set(managedCodexDirectoryPaths, forKey: Self.codexDirsKey) }
+    }
+
     /// Dashboard tile size preset.
     @Published var tileSize: TileSize {
         didSet { defaults.set(tileSize.rawValue, forKey: Self.tileSizeKey) }
@@ -125,6 +130,7 @@ final class Preferences: ObservableObject {
     }
 
     private static let configDirsKey        = "managedConfigDirectories"
+    private static let codexDirsKey         = "managedCodexDirectories"
     private static let onboardedKey         = "onboarded"
     private static let tileSizeKey          = "tileSize"
     private static let paletteKey           = "paletteID"
@@ -147,6 +153,7 @@ final class Preferences: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.managedConfigDirectoryPaths = defaults.stringArray(forKey: Self.configDirsKey) ?? []
+        self.managedCodexDirectoryPaths = defaults.stringArray(forKey: Self.codexDirsKey) ?? []
         self.disabledTerminalBundleIDs = Set(defaults.stringArray(forKey: Self.disabledTerminalsKey) ?? [])
 
         // Unknown raw values → default, so a future enum change can't prevent launch.

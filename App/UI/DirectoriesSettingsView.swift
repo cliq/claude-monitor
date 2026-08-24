@@ -5,6 +5,7 @@ import AppKit
 struct DirectoriesSettingsView: View {
     @ObservedObject var preferences: Preferences
     @State private var directoriesWithStatus: [ManagedConfigDirectory] = []
+    @State private var codexDirectoriesWithStatus: [ManagedConfigDirectory] = []
     @State private var errorMessage: String?
 
     var body: some View {
@@ -16,35 +17,39 @@ struct DirectoriesSettingsView: View {
 
             List {
                 ForEach(directoriesWithStatus) { entry in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(entry.url.path).font(.system(.body, design: .monospaced))
-                            Text(statusLabel(entry.status))
-                                .font(.caption)
-                                .foregroundStyle(statusColor(entry.status))
-                        }
-                        Spacer()
-                        if entry.status == .installed {
-                            Button("Reinstall") { install(entry.url) }
-                        } else if entry.status == .outdated || entry.status == .modifiedExternally {
-                            Button("Reinstall") { install(entry.url) }
-                                .tint(.orange)
-                        } else {
-                            Button("Install") { install(entry.url) }
-                        }
-                        if entry.status != .notInstalled {
-                            Button("Uninstall") { uninstall(entry) }
-                        }
-                        Button("Remove", role: .destructive) { remove(entry) }
-                    }
-                    .padding(.vertical, 4)
+                    directoryRow(entry,
+                                 install: { install(entry.url) },
+                                 uninstall: { uninstall(entry) },
+                                 remove: { remove(entry) })
                 }
             }
-            .frame(minHeight: 160)
+            .frame(minHeight: 120)
 
             HStack {
                 Button("Add Directory…") { addDirectory() }
                 Button("Redetect") { redetect() }
+                Spacer()
+            }
+
+            Divider()
+
+            Text("Managed Codex config directories").font(.headline)
+            Text("Codex sessions report through hooks installed into each directory's hooks.json. After installing, run /hooks inside Codex to review and trust the new entries — they stay inactive until trusted.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            List {
+                ForEach(codexDirectoriesWithStatus) { entry in
+                    directoryRow(entry,
+                                 install: { installCodex(entry.url) },
+                                 uninstall: { uninstallCodex(entry) },
+                                 remove: { removeCodex(entry) })
+                }
+            }
+            .frame(minHeight: 100)
+
+            HStack {
+                Button("Redetect Codex") { redetectCodex() }
                 Spacer()
             }
 
@@ -54,6 +59,34 @@ struct DirectoriesSettingsView: View {
         }
         .padding(20)
         .onAppear { refresh() }
+    }
+
+    private func directoryRow(_ entry: ManagedConfigDirectory,
+                              install: @escaping () -> Void,
+                              uninstall: @escaping () -> Void,
+                              remove: @escaping () -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(entry.url.path).font(.system(.body, design: .monospaced))
+                Text(statusLabel(entry.status))
+                    .font(.caption)
+                    .foregroundStyle(statusColor(entry.status))
+            }
+            Spacer()
+            if entry.status == .installed {
+                Button("Reinstall") { install() }
+            } else if entry.status == .outdated || entry.status == .modifiedExternally {
+                Button("Reinstall") { install() }
+                    .tint(.orange)
+            } else {
+                Button("Install") { install() }
+            }
+            if entry.status != .notInstalled {
+                Button("Uninstall") { uninstall() }
+            }
+            Button("Remove", role: .destructive) { remove() }
+        }
+        .padding(.vertical, 4)
     }
 
     private func refresh() {
@@ -66,7 +99,18 @@ struct DirectoriesSettingsView: View {
                                               status: status.status,
                                               installedVersion: status.installedVersion)
             }
+        codexDirectoriesWithStatus = preferences.managedCodexDirectoryPaths
+            .map(URL.init(fileURLWithPath:))
+            .map { url in
+                let status = (try? HookInstaller.inspectCodexHook(configDir: url))
+                    ?? HookInstaller.Status(status: .notInstalled, installedVersion: 0)
+                return ManagedConfigDirectory(url: url,
+                                              status: status.status,
+                                              installedVersion: status.installedVersion)
+            }
     }
+
+    // MARK: Claude directories
 
     private func install(_ dir: URL) {
         do {
@@ -144,6 +188,78 @@ struct DirectoriesSettingsView: View {
         if !preferences.managedConfigDirectoryPaths.contains(url.path) {
             preferences.managedConfigDirectoryPaths.append(url.path)
         }
+        refresh()
+    }
+
+    // MARK: Codex directories
+
+    private func installCodex(_ dir: URL) {
+        do {
+            try HookScriptDeployer.deployCodexScript()
+            try HookInstaller.installCodexHook(configDir: dir)
+            refresh()
+            showCodexInstallSuccess(hooksFile: dir.appendingPathComponent("hooks.json"))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func showCodexInstallSuccess(hooksFile: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Codex hooks installed — trust required"
+        alert.informativeText = """
+        Modified: \(hooksFile.path)
+
+        A backup of the previous contents was saved alongside as hooks.json.claude-monitor.bak.
+
+        Codex won't run the new hooks until you trust them:
+        1. Start or restart Codex.
+        2. Run /hooks.
+        3. Review and trust the Claude Monitor entries.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func uninstallCodex(_ entry: ManagedConfigDirectory) {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall Codex hooks from \(entry.url.lastPathComponent)?"
+        alert.informativeText = "Claude Monitor's hook entries will be removed from hooks.json. Hooks installed by other tools are preserved. The directory stays in the list and can be reinstalled later."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try HookInstaller.uninstallCodexHook(configDir: entry.url)
+            refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func removeCodex(_ entry: ManagedConfigDirectory) {
+        let alert = NSAlert()
+        alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
+        alert.informativeText = "This only removes the directory from Claude Monitor's list. Any installed hook in its hooks.json is left in place — use Uninstall first if you want that gone too."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        preferences.managedCodexDirectoryPaths.removeAll { $0 == entry.url.path }
+        refresh()
+    }
+
+    private func redetectCodex() {
+        let discovered = ConfigDirectoryDiscovery.scanCodex().map(\.path)
+        let currentSet = Set(preferences.managedCodexDirectoryPaths)
+        let added = discovered.filter { !currentSet.contains($0) }
+        guard !added.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "No new Codex directories found."
+            alert.informativeText = "Scanned your home folder for `.codex` and `.codexwho-*` directories containing a config.toml or auth.json."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+        preferences.managedCodexDirectoryPaths.append(contentsOf: added)
         refresh()
     }
 

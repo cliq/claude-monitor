@@ -19,6 +19,15 @@ struct TileView: View {
                         .font(.system(size: metrics.titlePointSize, weight: metrics.titleWeight))
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if session.provider != .claude {
+                        Text(session.provider.displayName)
+                            .font(.system(size: metrics.statusPointSize * 0.85, weight: .semibold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(palette.textColor.opacity(0.18)))
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
                     Spacer(minLength: 0)
                     Circle()
                         .fill(palette.textColor)

@@ -20,11 +20,13 @@ struct HookEvent: Codable, Equatable {
     let notificationType: String?
     let message: String?
     let backgroundTasksActive: Int?
+    let provider: AgentProvider
 
     init(hook: HookName, sessionId: String, tty: String, pid: Int32, cwd: String,
          ts: Int, promptPreview: String?, toolName: String?,
          notificationType: String?, message: String?,
-         backgroundTasksActive: Int? = nil) {
+         backgroundTasksActive: Int? = nil,
+         provider: AgentProvider = .claude) {
         self.hook = hook
         self.sessionId = sessionId
         self.tty = tty
@@ -36,6 +38,24 @@ struct HookEvent: Codable, Equatable {
         self.notificationType = notificationType
         self.message = message
         self.backgroundTasksActive = backgroundTasksActive
+        self.provider = provider
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hook = try c.decode(HookName.self, forKey: .hook)
+        sessionId = try c.decode(String.self, forKey: .sessionId)
+        tty = try c.decode(String.self, forKey: .tty)
+        pid = try c.decode(Int32.self, forKey: .pid)
+        cwd = try c.decode(String.self, forKey: .cwd)
+        ts = try c.decode(Int.self, forKey: .ts)
+        promptPreview = try c.decodeIfPresent(String.self, forKey: .promptPreview)
+        toolName = try c.decodeIfPresent(String.self, forKey: .toolName)
+        notificationType = try c.decodeIfPresent(String.self, forKey: .notificationType)
+        message = try c.decodeIfPresent(String.self, forKey: .message)
+        backgroundTasksActive = try c.decodeIfPresent(Int.self, forKey: .backgroundTasksActive)
+        // Absent for payloads from hook.sh versions that predate provider tagging.
+        provider = try c.decodeIfPresent(AgentProvider.self, forKey: .provider) ?? .claude
     }
 
     enum CodingKeys: String, CodingKey {
@@ -50,5 +70,6 @@ struct HookEvent: Codable, Equatable {
         case notificationType = "notification_type"
         case message
         case backgroundTasksActive = "background_tasks_active"
+        case provider
     }
 }

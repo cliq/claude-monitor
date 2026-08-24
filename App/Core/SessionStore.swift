@@ -62,6 +62,7 @@ final class SessionStore: ObservableObject {
             if newState == .finished { return }
             var session = Session(
                 id: event.sessionId,
+                provider: event.provider,
                 cwd: event.cwd,
                 tty: event.tty,
                 pid: event.pid,

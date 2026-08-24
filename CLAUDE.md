@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session as colored tiles. Each session reports transitions through Claude Code hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, and Orca are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session (and, since the Codex integration, OpenAI Codex CLI sessions) as colored tiles. Each session reports transitions through agent lifecycle hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, and Orca are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
 ## Build / test
 
@@ -90,6 +90,12 @@ Hook entries are installed **into the user's Claude config directories**, not th
 ### State machine
 
 `App/Core/StateMachine.swift` is a pure function — keep it that way so the table-driven tests stay meaningful. States are `working | waiting | needsYou | finished`. `finished` is absorbing and triggers removal from the store. Unknown sessions synthesize `SessionStart` (→ `waiting`) so the tile still appears when the app launches after Claude sessions are already running.
+
+### Codex support
+
+Codex CLI sessions flow through the same pipeline via `scripts/codex-hook.sh` (installed to `~/.claude-monitor/codex-hook.sh`), which **normalizes** Codex events into the existing closed vocabulary before POSTing: `PermissionRequest` becomes `Notification` with `notification_type=permission_prompt`, so `StateMachine` and `PushNotifier` have zero Codex-specific code. Session IDs are namespaced `codex:<uuid>` in the script (Claude IDs stay raw — no migration), and the payload carries `provider: "codex"`; `HookEvent`/`Session` decode a missing `provider` as `.claude`. The script must never write to stdout (Codex would read JSON from a `PermissionRequest` hook as an allow/deny decision) and must not use apostrophes inside its python heredoc (macOS bash 3.2 quote-scans heredoc content inside `$(...)`).
+
+`HookInstaller`'s `codexKind` targets `<configDir>/hooks.json` (marker files `config.toml`/`auth.json` via `ConfigDirectoryDiscovery.scanCodex`; dirs named `.codex`/`.codexwho-*`), keeps entries schema-minimal (no matcher/sidecar keys — ownership is the arg-encoded command tag only), pins `timeout: 3` on `SessionEnd` (Codex kills those hooks after 1s by default, 3s max), and backs up to `hooks.json.claude-monitor.bak` because other tools (Orca) already own `hooks.json.bak`. Foreign entries in `hooks.json` must survive install/uninstall — see `Tests/Fixtures/codex-hooks-with-foreign-entries.json`. After installation Codex requires the user to trust the hooks via `/hooks` (trust is recorded against the hook definition's hash, so changing the command string re-triggers review); the settings UI surfaces this. `scanCodex` is deliberately separate from `scan()` — Claude-only consumers (`UsageAccountConfig`) must never see Codex dirs.
 
 ### Hook schema versioning
 

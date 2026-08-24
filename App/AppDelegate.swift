@@ -63,6 +63,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     install: { try HookInstaller.installOfflineHook(configDir: $0) }
                 ).count
             }
+
+            let codexDirs = preferences.managedCodexDirectoryPaths.map { URL(fileURLWithPath: $0) }
+            if !codexDirs.isEmpty {
+                do {
+                    try HookScriptDeployer.deployCodexScript()
+                } catch {
+                    NSLog("HookScriptDeployer: launch codex deploy failed — \(error)")
+                }
+                refreshed += HookMaintenance.reinstallOutdated(
+                    managedDirs: codexDirs,
+                    inspect: { try HookInstaller.inspectCodexHook(configDir: $0).status },
+                    install: { try HookInstaller.installCodexHook(configDir: $0) }
+                ).count
+            }
             if refreshed > 0 {
                 NSLog("HookMaintenance: refreshed \(refreshed) outdated managed hook entr(ies) after update to build \(build)")
             }

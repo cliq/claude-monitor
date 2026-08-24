@@ -42,6 +42,8 @@ targets:
       - path: App
       - path: scripts/hook.sh
         buildPhase: resources
+      - path: scripts/codex-hook.sh
+        buildPhase: resources
       - path: scripts/offline-prowl.sh.template
         buildPhase: resources
     info:
@@ -82,6 +84,8 @@ targets:
     sources:
       - path: Tests
       - path: scripts/hook.sh
+        buildPhase: resources
+      - path: scripts/codex-hook.sh
         buildPhase: resources
       - path: scripts/offline-prowl.sh.template
         buildPhase: resources

@@ -156,7 +156,10 @@ final class MenuBarController: NSObject {
     private func rowTitle(for session: Session, now: Date) -> String {
         let secs = max(0, Int(now.timeIntervalSince(session.enteredStateAt)))
         let elapsed = String(format: "%d:%02d", secs / 60, secs % 60)
-        return "\(session.projectName)  ·  \(session.state.displayLabel) · \(elapsed)"
+        let name = session.provider == .claude
+            ? session.projectName
+            : "\(session.projectName) (\(session.provider.displayName))"
+        return "\(name)  ·  \(session.state.displayLabel) · \(elapsed)"
     }
 
     private func circleImage(color: NSColor, size: CGSize = CGSize(width: 14, height: 14)) -> NSImage {

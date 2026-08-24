@@ -27,6 +27,10 @@ final class StaleSessionSweeper {
     func sweep() {
         for session in store.orderedSessions {
             guard session.state != .finished else { continue }
+            // pid <= 0 means the hook couldn't capture a real process (e.g. a Codex
+            // app-server session) — kill(0/-n, 0) would target a process group, not
+            // a process, so such sessions are only removed by SessionEnd.
+            guard session.pid > 0 else { continue }
             if kill(session.pid, 0) != 0 {   // process gone
                 store.markFinished(sessionId: session.id)
             }

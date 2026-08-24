@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -x '/Users/someone/.orca/agent-hooks/codex-hook.sh' ]; then /bin/sh '/Users/someone/.orca/agent-hooks/codex-hook.sh'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -x '/Users/someone/.orca/agent-hooks/codex-hook.sh' ]; then /bin/sh '/Users/someone/.orca/agent-hooks/codex-hook.sh'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
