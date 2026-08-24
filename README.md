@@ -4,9 +4,9 @@
 
 # Claude Monitor
 
-A native macOS menu-bar app that shows the live state of every Claude Code CLI session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
+A native macOS menu-bar app that shows the live state of every Claude Code and OpenAI Codex CLI session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
 
-Each tile represents one Claude Code session and is one of five states:
+Each tile represents one session and is one of five states:
 
 | State | Color | Meaning |
 |---|---|---|
@@ -33,9 +33,11 @@ Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 
 Only hook entries tagged with `--managed-by=claude-monitor` in the command are touched by the installer; your own hooks are left alone, and a rolling `settings.json.bak` is kept before every write.
 
-## Multiple Claude configurations
+Codex sessions work the same way: the app installs a second hook script into each Codex directory's `hooks.json`. After installing, run `/hooks` inside Codex once to trust the new entries — Codex will not run them until you do.
 
-Claude Monitor is built around the idea that you may run several Claude Code configurations side by side — for example one per client or per workspace. It auto-discovers `~/.claude` and any `~/.claudewho-*` directory that contains a `settings.json`, and lets you install or uninstall hooks into each one independently from Settings. Sessions from every managed directory land in the same dashboard.
+## Multiple configurations
+
+Claude Monitor is built around the idea that you may run several Claude Code configurations side by side — for example one per client or per workspace. It auto-discovers `~/.claude` and any `~/.claudewho-*` directory that contains a `settings.json`, and lets you install or uninstall hooks into each one independently from Settings. The same goes for Codex: it finds `~/.codex` and any `~/.codexwho-*` directory, and you can add other locations by hand. Sessions from every managed directory land in the same dashboard.
 
 If you juggle multiple Claude configs, pair it with [claudewho](https://github.com/frisble/claudewho) — the `~/.claudewho-*` layout Claude Monitor discovers is the one `claudewho` creates.
 
@@ -82,7 +84,7 @@ make monitor      # serial console at 115200 baud
 
 - macOS 14 or later
 - [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac), [iTerm2](https://iterm2.com), or [Orca](https://onorca.dev) (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
-- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
+- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) and/or [OpenAI Codex CLI](https://developers.openai.com/codex/cli/)
 
 ## Install
 
@@ -102,11 +104,11 @@ This builds a Release with ad-hoc signing, quits any running copy, replaces `/Ap
 
 ### First launch
 
-On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed.
+On first launch, the app asks which of your Claude config directories (`~/.claude`, any `~/.claudewho-*`) to install hooks into. Install hooks in the directories you use — nothing shows up in the dashboard until at least one is installed. Codex directories (`~/.codex`, any `~/.codexwho-*`) can be set up the same way in **Settings → Directories**; remember to trust the hooks with `/hooks` inside Codex afterwards.
 
 ## Uninstalling
 
-1. In the app, go to Settings and click **Uninstall** next to each managed directory. This removes the hook block from its `settings.json`.
+1. In the app, go to Settings and click **Uninstall** next to each managed directory. This removes the hook entries from its `settings.json` (Claude) or `hooks.json` (Codex).
 2. Quit the app.
 3. Remove `~/.claude-monitor/` to clean up the runtime files.
 4. Remove `/Applications/ClaudeMonitor.app`.
