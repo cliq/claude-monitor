@@ -51,7 +51,9 @@ struct UsageWidgetView: View {
             }
         default:
             VStack(alignment: .leading, spacing: 0) {
-                let accounts = Array(snapshot.accounts.prefix(4))
+                // Three rows is what the large family fits without clipping;
+                // Settings → Usage's drag order decides which three.
+                let accounts = Array(snapshot.accounts.prefix(3))
                 if accounts.isEmpty {
                     emptyState
                 } else {
@@ -121,6 +123,10 @@ private struct UsageAccountBlock: View {
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(1.2)
                     .foregroundStyle(UsagePalette.name)
+                Text(account.provider.displayName.uppercased())
+                    .font(.system(size: 7, weight: .medium))
+                    .kerning(0.8)
+                    .foregroundStyle(UsagePalette.muted)
                 Spacer()
                 Circle()
                     .fill(account.status == "error" || isStale ? UsagePalette.crit : UsagePalette.okDot)
