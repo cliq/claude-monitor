@@ -53,4 +53,26 @@ final class PreferencesTests: XCTestCase {
         XCTAssertTrue(reloaded.prowlEnabled)
         XCTAssertTrue(reloaded.prowlOfflineHookEnabled)
     }
+
+    func test_showProviderBadges_defaultsToTrue() {
+        let prefs = Preferences(defaults: defaults)
+        XCTAssertTrue(prefs.showProviderBadges)
+    }
+
+    func test_showProviderBadges_roundTrips() {
+        let prefs = Preferences(defaults: defaults)
+        prefs.showProviderBadges = false
+        XCTAssertFalse(Preferences(defaults: defaults).showProviderBadges)
+    }
+
+    func test_multipleProvidersConfigured_requiresBothLists() {
+        let prefs = Preferences(defaults: defaults)
+        XCTAssertFalse(prefs.multipleProvidersConfigured)
+
+        prefs.managedConfigDirectoryPaths = ["/Users/x/.claude"]
+        XCTAssertFalse(prefs.multipleProvidersConfigured)
+
+        prefs.managedCodexDirectoryPaths = ["/Users/x/.codex"]
+        XCTAssertTrue(prefs.multipleProvidersConfigured)
+    }
 }

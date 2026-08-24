@@ -15,6 +15,18 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(managedCodexDirectoryPaths, forKey: Self.codexDirsKey) }
     }
 
+    /// When true (default), tiles and menu rows are labeled with their agent
+    /// provider — but only while `multipleProvidersConfigured` (a single-agent
+    /// setup needs no labels).
+    @Published var showProviderBadges: Bool {
+        didSet { defaults.set(showProviderBadges, forKey: Self.showProviderBadgesKey) }
+    }
+
+    /// True when directories for more than one agent provider are managed.
+    var multipleProvidersConfigured: Bool {
+        !managedConfigDirectoryPaths.isEmpty && !managedCodexDirectoryPaths.isEmpty
+    }
+
     /// Dashboard tile size preset.
     @Published var tileSize: TileSize {
         didSet { defaults.set(tileSize.rawValue, forKey: Self.tileSizeKey) }
@@ -131,6 +143,7 @@ final class Preferences: ObservableObject {
 
     private static let configDirsKey        = "managedConfigDirectories"
     private static let codexDirsKey         = "managedCodexDirectories"
+    private static let showProviderBadgesKey = "showProviderBadges"
     private static let onboardedKey         = "onboarded"
     private static let tileSizeKey          = "tileSize"
     private static let paletteKey           = "paletteID"
@@ -154,6 +167,8 @@ final class Preferences: ObservableObject {
         self.defaults = defaults
         self.managedConfigDirectoryPaths = defaults.stringArray(forKey: Self.configDirsKey) ?? []
         self.managedCodexDirectoryPaths = defaults.stringArray(forKey: Self.codexDirsKey) ?? []
+        // Missing key defaults to true — badges appear as soon as a second provider is configured.
+        self.showProviderBadges = (defaults.object(forKey: Self.showProviderBadgesKey) as? Bool) ?? true
         self.disabledTerminalBundleIDs = Set(defaults.stringArray(forKey: Self.disabledTerminalsKey) ?? [])
 
         // Unknown raw values → default, so a future enum change can't prevent launch.

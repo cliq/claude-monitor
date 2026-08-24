@@ -28,7 +28,9 @@ struct DashboardView: View {
                     padding: metrics.padding
                 ) {
                     ForEach(sessions) { session in
-                        TileView(session: session, now: now, metrics: metrics, palette: palette)
+                        TileView(session: session, now: now, metrics: metrics, palette: palette,
+                                 showProviderBadge: preferences.showProviderBadges
+                                     && preferences.multipleProvidersConfigured)
                             .flash(id: flashIds[session.id])
                             .onTapGesture { onClickSession(session) }
                             .contextMenu {

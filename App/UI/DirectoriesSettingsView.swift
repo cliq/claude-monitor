@@ -9,21 +9,30 @@ struct DirectoriesSettingsView: View {
     @State private var errorMessage: String?
 
     var body: some View {
+        // The two directory lists can outgrow the fixed tab frame, so the whole
+        // pane scrolls (same pattern as the Usage pane) and the lists are plain
+        // stacks rather than Lists — nested scroll containers don't mix.
+        ScrollView {
+            content
+        }
+        .onAppear {
+            autoDetectCodexIfEmpty()
+            refresh()
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Managed Claude config directories").font(.headline)
             Text("Claude Monitor installs its hook block into each directory's settings.json. Other hooks you've configured are preserved.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            List {
-                ForEach(directoriesWithStatus) { entry in
-                    directoryRow(entry,
-                                 install: { install(entry.url) },
-                                 uninstall: { uninstall(entry) },
-                                 remove: { remove(entry) })
-                }
-            }
-            .frame(minHeight: 120)
+            directoryList(directoriesWithStatus,
+                          emptyLabel: "No Claude directories in the list — use Redetect or Add Directory.",
+                          install: { install($0.url) },
+                          uninstall: { uninstall($0) },
+                          remove: { remove($0) })
 
             HStack {
                 Button("Add Directory…") { addDirectory() }
@@ -38,15 +47,11 @@ struct DirectoriesSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            List {
-                ForEach(codexDirectoriesWithStatus) { entry in
-                    directoryRow(entry,
-                                 install: { installCodex(entry.url) },
-                                 uninstall: { uninstallCodex(entry) },
-                                 remove: { removeCodex(entry) })
-                }
-            }
-            .frame(minHeight: 100)
+            directoryList(codexDirectoriesWithStatus,
+                          emptyLabel: "No Codex directories found under your home folder.",
+                          install: { installCodex($0.url) },
+                          uninstall: { uninstallCodex($0) },
+                          remove: { removeCodex($0) })
 
             HStack {
                 Button("Redetect Codex") { redetectCodex() }
@@ -58,7 +63,35 @@ struct DirectoriesSettingsView: View {
             }
         }
         .padding(20)
-        .onAppear { refresh() }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func directoryList(_ entries: [ManagedConfigDirectory],
+                               emptyLabel: String,
+                               install: @escaping (ManagedConfigDirectory) -> Void,
+                               uninstall: @escaping (ManagedConfigDirectory) -> Void,
+                               remove: @escaping (ManagedConfigDirectory) -> Void) -> some View {
+        if entries.isEmpty {
+            Text(emptyLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 8)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    directoryRow(entry,
+                                 install: { install(entry) },
+                                 uninstall: { uninstall(entry) },
+                                 remove: { remove(entry) })
+                    if entry.id != entries.last?.id {
+                        Divider()
+                    }
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor)))
+        }
     }
 
     private func directoryRow(_ entry: ManagedConfigDirectory,
@@ -86,7 +119,8 @@ struct DirectoriesSettingsView: View {
             }
             Button("Remove", role: .destructive) { remove() }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
     }
 
     private func refresh() {
@@ -151,12 +185,11 @@ struct DirectoriesSettingsView: View {
     }
 
     private func remove(_ entry: ManagedConfigDirectory) {
-        let alert = NSAlert()
-        alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
-        alert.informativeText = "This only removes the directory from Claude Monitor's list. Any installed hook in its settings.json is left in place — use Uninstall first if you want that gone too."
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        // Only warn when there is actually an installed hook the user might
+        // expect Remove to clean up; removing an uninstalled row is harmless.
+        if entry.status != .notInstalled {
+            guard confirmRemove(entry, hooksFileName: "settings.json") else { return }
+        }
         preferences.managedConfigDirectoryPaths.removeAll { $0 == entry.url.path }
         refresh()
     }
@@ -192,6 +225,16 @@ struct DirectoriesSettingsView: View {
     }
 
     // MARK: Codex directories
+
+    /// First visit seeds the Codex list from a silent scan so the section isn't
+    /// blank. Only runs while the list is empty — a user who removed entries
+    /// deliberately gets them back only via Redetect Codex.
+    private func autoDetectCodexIfEmpty() {
+        guard preferences.managedCodexDirectoryPaths.isEmpty else { return }
+        let discovered = ConfigDirectoryDiscovery.scanCodex().map(\.path)
+        guard !discovered.isEmpty else { return }
+        preferences.managedCodexDirectoryPaths = discovered
+    }
 
     private func installCodex(_ dir: URL) {
         do {
@@ -237,12 +280,9 @@ struct DirectoriesSettingsView: View {
     }
 
     private func removeCodex(_ entry: ManagedConfigDirectory) {
-        let alert = NSAlert()
-        alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
-        alert.informativeText = "This only removes the directory from Claude Monitor's list. Any installed hook in its hooks.json is left in place — use Uninstall first if you want that gone too."
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if entry.status != .notInstalled {
+            guard confirmRemove(entry, hooksFileName: "hooks.json") else { return }
+        }
         preferences.managedCodexDirectoryPaths.removeAll { $0 == entry.url.path }
         refresh()
     }
@@ -261,6 +301,17 @@ struct DirectoriesSettingsView: View {
         }
         preferences.managedCodexDirectoryPaths.append(contentsOf: added)
         refresh()
+    }
+
+    // MARK: Shared helpers
+
+    private func confirmRemove(_ entry: ManagedConfigDirectory, hooksFileName: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
+        alert.informativeText = "This only removes the directory from Claude Monitor's list. The installed hook in its \(hooksFileName) is left in place — use Uninstall first if you want that gone too."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func statusLabel(_ s: HookInstallStatus) -> String {

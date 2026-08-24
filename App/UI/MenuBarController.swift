@@ -156,9 +156,10 @@ final class MenuBarController: NSObject {
     private func rowTitle(for session: Session, now: Date) -> String {
         let secs = max(0, Int(now.timeIntervalSince(session.enteredStateAt)))
         let elapsed = String(format: "%d:%02d", secs / 60, secs % 60)
-        let name = session.provider == .claude
-            ? session.projectName
-            : "\(session.projectName) (\(session.provider.displayName))"
+        let labelProviders = preferences.showProviderBadges && preferences.multipleProvidersConfigured
+        let name = labelProviders
+            ? "\(session.projectName) (\(session.provider.displayName))"
+            : session.projectName
         return "\(name)  ·  \(session.state.displayLabel) · \(elapsed)"
     }
 

@@ -6,6 +6,9 @@ struct TileView: View {
     let now: Date   // passed in so elapsed time ticks from a shared clock
     let metrics: TileMetrics
     let palette: Palette
+    /// On when badges are enabled AND more than one provider is configured —
+    /// then every tile is labeled (Claude and Codex alike), otherwise none are.
+    var showProviderBadge: Bool = false
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -19,7 +22,7 @@ struct TileView: View {
                         .font(.system(size: metrics.titlePointSize, weight: metrics.titleWeight))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if session.provider != .claude {
+                    if showProviderBadge {
                         Text(session.provider.displayName)
                             .font(.system(size: metrics.statusPointSize * 0.85, weight: .semibold))
                             .padding(.horizontal, 4)

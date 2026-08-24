@@ -8,7 +8,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             DirectoriesSettingsView(preferences: preferences)
-                .frame(width: 560, height: 440)
+                .frame(width: 560, height: 560)
                 .tabItem { Label("Directories", systemImage: "folder") }
 
             GeneralSettingsView(preferences: preferences, updateChecker: updateChecker)
@@ -16,7 +16,7 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
 
             AppearanceSettingsView(preferences: preferences)
-                .frame(width: 560, height: 300)
+                .frame(width: 560, height: 400)
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
 
             TerminalsSettingsView(preferences: preferences)

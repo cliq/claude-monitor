@@ -8,9 +8,22 @@ struct AppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             sizeSection
             paletteSection
+            badgeSection
             Spacer(minLength: 0)
         }
         .padding(20)
+    }
+
+    // MARK: - Agent badges
+
+    private var badgeSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Agent badges").font(.headline)
+            Toggle("Label sessions with their agent", isOn: $preferences.showProviderBadges)
+            Text("Tiles and menu rows get a Claude or Codex label. Only shown while directories for more than one agent are configured.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Tile size
