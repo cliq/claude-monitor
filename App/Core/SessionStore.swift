@@ -53,7 +53,13 @@ final class SessionStore: ObservableObject {
             if let preview = event.promptPreview {
                 session.lastPromptPreview = preview
             }
-            session.backgroundTaskCount = (newState == .backgroundWorking) ? activeBackground : 0
+            // Only `Stop` carries a task list. Events without one (e.g. the idle
+            // Notification that keeps `.backgroundWorking`) must not zero the count.
+            if newState != .backgroundWorking {
+                session.backgroundTaskCount = 0
+            } else if let reported = event.backgroundTasksActive {
+                session.backgroundTaskCount = reported
+            }
             orderedSessions[idx] = session
         } else {
             let activeBackground = event.backgroundTasksActive ?? 0

@@ -123,7 +123,7 @@ final class HookScriptTests: XCTestCase {
         proc.standardInput = inputPipe
         try proc.run()
         inputPipe.fileHandleForWriting.write(#"""
-        {"session_id":"s","background_tasks":[{"id":"a","status":"running"},{"id":"b","status":"completed"},{"id":"c","status":"in_progress"}]}
+        {"session_id":"s","background_tasks":[{"id":"a","type":"subagent","status":"running"},{"id":"b","type":"shell","status":"completed"},{"id":"c","type":"workflow","status":"in_progress"},{"id":"d","type":"shell","status":"killed"},{"id":"e","type":"shell","status":"stopped"},{"id":"f","type":"monitor","status":"running"},{"id":"g","type":"monitor_ws","status":"running"}]}
         """#.data(using: .utf8)!)
         try inputPipe.fileHandleForWriting.close()
         proc.waitUntilExit()

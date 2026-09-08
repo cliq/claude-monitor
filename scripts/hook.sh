@@ -63,10 +63,17 @@ if isinstance(msg, str):
     out["message"] = msg
 bg = src.get("background_tasks")
 if isinstance(bg, list):
-    terminal = {"completed", "failed", "cancelled"}
+    # Only count work that will eventually wake the session (subagents, shell jobs,
+    # workflows, cloud sessions...). Monitors -- artifact live-update watches and the
+    # Monitor tool -- are open-ended and may never fire; counting them parks the tile
+    # in "Working" forever because no hook fires when a background task ends.
+    terminal = {"completed", "failed", "cancelled", "killed", "stopped"}
+    passive_types = {"monitor", "monitor_ws", "monitor_mcp"}
     out["background_tasks_active"] = sum(
         1 for t in bg
-        if isinstance(t, dict) and str(t.get("status", "")).lower() not in terminal
+        if isinstance(t, dict)
+        and str(t.get("status", "")).lower() not in terminal
+        and str(t.get("type", "")).lower() not in passive_types
     )
 print(json.dumps(out))
 PY

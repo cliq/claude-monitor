@@ -189,6 +189,36 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(s?.backgroundTaskCount, 0)
     }
 
+    func test_idleNotificationKeepsBackgroundTaskCount() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s"))
+        let busy = HookEvent(hook: .stop, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                             ts: 0, promptPreview: nil, toolName: nil,
+                             notificationType: nil, message: nil, backgroundTasksActive: 2)
+        store.apply(busy)
+        let ping = HookEvent(hook: .notification, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                             ts: 0, promptPreview: nil, toolName: nil,
+                             notificationType: "idle_prompt",
+                             message: "Claude is waiting for your input")
+        store.apply(ping)
+        let s = store.orderedSessions.first { $0.id == "s" }
+        XCTAssertEqual(s?.state, .backgroundWorking)
+        XCTAssertEqual(s?.backgroundTaskCount, 2)
+    }
+
+    func test_leavingBackgroundWorkingClearsTaskCount() {
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event(.sessionStart, session: "s"))
+        let busy = HookEvent(hook: .stop, sessionId: "s", tty: "/dev/ttys0", pid: 1, cwd: "/p",
+                             ts: 0, promptPreview: nil, toolName: nil,
+                             notificationType: nil, message: nil, backgroundTasksActive: 2)
+        store.apply(busy)
+        store.apply(event(.userPromptSubmit, session: "s"))
+        let s = store.orderedSessions.first { $0.id == "s" }
+        XCTAssertEqual(s?.state, .working)
+        XCTAssertEqual(s?.backgroundTaskCount, 0)
+    }
+
     func test_applyForwardsEventEvenWhenSessionIsRemoved() {
         var captured: [HookEvent] = []
         let store = SessionStore(clock: FakeClock(), onEventApplied: { captured.append($0) })
