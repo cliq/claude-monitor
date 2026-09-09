@@ -157,6 +157,34 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertEqual(CodexUsageMapper.summarize(result, name: "codex").metrics.map(\.label), ["30D"])
     }
 
+    // MARK: - Mapping: plan labels
+
+    func test_planLabel_businessPremiumSeat() throws {
+        // OpenAI Business "premium" seats report the long snake_case id that
+        // used to render truncated as "SELF_SE…"; Codex's TUI calls it
+        // "Business Premium".
+        let result = try decodeResult("""
+        {"rateLimits":{"limitId":"codex","planType":"self_serve_business_prolite",
+          "primary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":1789574426}}}
+        """)
+        XCTAssertEqual(CodexUsageMapper.summarize(result, name: "cliq").plan, "BUSINESS PREMIUM")
+    }
+
+    func test_planLabel_knownAndUnknownPlanTypes() {
+        XCTAssertEqual(CodexUsageMapper.planLabel("self_serve_business_usage_based"), "BUSINESS USAGE-BASED")
+        XCTAssertEqual(CodexUsageMapper.planLabel("enterprise_cbp_automation"), "ENTERPRISE AUTOMATION")
+        XCTAssertEqual(CodexUsageMapper.planLabel("enterprise_cbp_usage_based"), "ENTERPRISE USAGE-BASED")
+        // Simple tiers pass through uppercased.
+        XCTAssertEqual(CodexUsageMapper.planLabel("plus"), "PLUS")
+        // `prolite` is the ChatGPT Pro 5x tier; plain `pro` is the 20x one.
+        XCTAssertEqual(CodexUsageMapper.planLabel("prolite"), "PRO 5X")
+        XCTAssertEqual(CodexUsageMapper.planLabel("pro"), "PRO")
+        XCTAssertEqual(CodexUsageMapper.planLabel(" Team "), "TEAM")
+        // Unknown identifiers are shown verbatim, just made readable.
+        XCTAssertEqual(CodexUsageMapper.planLabel("edu_plus"), "EDU PLUS")
+        XCTAssertEqual(CodexUsageMapper.planLabel("some_future_tier"), "SOME FUTURE TIER")
+    }
+
     // MARK: - Mapping: multi-bucket
 
     func test_summarize_prefersRateLimitsByLimitIdAndKeepsNamedBuckets() throws {

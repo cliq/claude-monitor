@@ -114,13 +114,16 @@ private struct UsageAccountRow: View {
                     .kerning(1.2)
                     .foregroundStyle(UsagePalette.name)
                     .lineLimit(1)
+                // Business seats carry two-word plans ("BUSINESS PREMIUM")
+                // that overflow the fixed column — wrap rather than truncate.
                 Text([account.provider.displayName.uppercased(), account.plan]
                         .filter { !$0.isEmpty }
                         .joined(separator: " · "))
                     .font(.system(size: 8, weight: .medium))
                     .kerning(0.8)
                     .foregroundStyle(UsagePalette.muted)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(width: 96, alignment: .leading)
             if account.status == "error" {

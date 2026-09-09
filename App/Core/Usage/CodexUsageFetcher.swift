@@ -52,7 +52,7 @@ enum CodexUsageMapper {
         }
 
         if let plan = buckets.compactMap({ $0.snapshot.planType }).first {
-            out.plan = plan.uppercased()
+            out.plan = planLabel(plan)
         }
 
         var windows: [ClassifiedWindow] = []
@@ -160,6 +160,25 @@ enum CodexUsageMapper {
     }
 
     // MARK: - Helpers
+
+    /// Display label for the app-server `planType`. Business/enterprise seats
+    /// arrive as long snake_case identifiers (`self_serve_business_prolite`)
+    /// that truncate in the panel; known ones get the names Codex's own TUI
+    /// uses ("Business Premium"; `prolite` is the Pro 5x tier, `pro` the 20x),
+    /// anything else is shown verbatim with the
+    /// underscores turned into spaces — never a guessed product name.
+    nonisolated static func planLabel(_ planType: String) -> String {
+        let key = planType.trimmingCharacters(in: .whitespaces).lowercased()
+        switch key {
+        case "prolite":                         return "PRO 5X"
+        case "self_serve_business_prolite":     return "BUSINESS PREMIUM"
+        case "self_serve_business_usage_based": return "BUSINESS USAGE-BASED"
+        case "enterprise_cbp_automation":       return "ENTERPRISE AUTOMATION"
+        case "enterprise_cbp_usage_based":      return "ENTERPRISE USAGE-BASED"
+        default:
+            return key.replacingOccurrences(of: "_", with: " ").uppercased()
+        }
+    }
 
     private nonisolated static func classify(_ durationMins: Double?) -> Kind {
         guard let durationMins else { return .other }
