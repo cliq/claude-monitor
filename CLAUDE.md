@@ -28,6 +28,12 @@ xcodebuild test -project ClaudeMonitor.xcodeproj -scheme ClaudeMonitor \
 
 The UI test target (`ClaudeMonitorUITests`) is currently skipped on Xcode 26.3 beta — see commit `d4441dd`.
 
+`xcodebuild test` runs the unit tests inside the real app binary. `AppDelegate.applicationDidFinishLaunching` bails out
+immediately when it detects XCTest (`AppDelegate.isUnitTestHost`), so the test host never takes the single-instance lock,
+starts the event server, rewrites `~/.claude-monitor/port`, refreshes hooks in the user's config dirs, or polls usage.
+Before that guard existed, `make test` silently pointed every running Claude Code session's hooks at a dead port until the
+production app was relaunched. Keep any new launch-time side effect below that guard; `AppDelegateTestHostTests` checks it.
+
 ## Architecture
 
 ### Event pipeline

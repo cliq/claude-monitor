@@ -27,10 +27,8 @@ schemes:
         - ClaudeMonitorTests
         - ClaudeMonitorIntegrationTests
         - ClaudeMonitorUITests
-      # Let the hosted test app run even when a production instance holds the
-      # single-instance lock — otherwise it self-terminates before tests connect.
-      environmentVariables:
-        CLAUDE_MONITOR_SKIP_SINGLE_INSTANCE: "1"
+      # The hosted test app detects XCTest itself (`AppDelegate.isUnitTestHost`)
+      # and skips its launch sequence, so no environment override is needed here.
 targets:
   ClaudeMonitor:
     type: application

@@ -27,11 +27,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var usageCancellables: Set<AnyCancellable> = []
     private var lastPublishedAccountsHash: Int?
 
+    /// True when this process is the host for the unit-test bundle (XCTest is
+    /// loaded into it). `xcodebuild test` launches the real app binary to run
+    /// `ClaudeMonitorTests`; that copy must not act like the product — it
+    /// would overwrite `~/.claude-monitor/port` with its own ephemeral port
+    /// and silently detach every Claude Code session from the production
+    /// instance until the next relaunch. UI tests launch the app as a separate
+    /// process without XCTest, so they still exercise the full launch path.
+    static var isUnitTestHost: Bool {
+        NSClassFromString("XCTestCase") != nil
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    /// True once `applicationDidFinishLaunching` has run the real launch
+    /// sequence. Static because `@NSApplicationDelegateAdaptor` hides the
+    /// instance behind SwiftUI's proxy delegate.
+    private(set) static var didLaunch = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 1. Single instance guard. Skipped in the test host so a running
-        //    production instance can't make the unit-test app self-terminate.
-        if ProcessInfo.processInfo.environment["CLAUDE_MONITOR_SKIP_SINGLE_INSTANCE"] != "1",
-           case .alreadyRunning = SingleInstanceGuard.acquire(at: SingleInstanceGuard.defaultLocation) {
+        // 0. Unit-test host: do nothing. No lock file, no event server / port
+        //    file, no hook maintenance in the user's config dirs, no pollers.
+        guard !Self.isUnitTestHost else { return }
+        Self.didLaunch = true
+
+        // 1. Single instance guard.
+        if case .alreadyRunning = SingleInstanceGuard.acquire(at: SingleInstanceGuard.defaultLocation) {
             NSApp.terminate(nil)
             return
         }
