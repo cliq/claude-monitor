@@ -7,16 +7,22 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     let provider: AgentProvider
     let name: String
     let configDir: String
+    /// Whether this account is included in the snapshot served to external
+    /// displays (widget, LAN bridge / ESP32). The panel always shows every
+    /// polled account regardless.
+    let showOnExternalDisplays: Bool
 
     /// Provider-qualified so a Claude and a Codex account with the same
     /// display name never collide. Preferences stay keyed by `configDir`
     /// alone — those paths are already distinct across providers.
     var id: String { "\(provider.rawValue):\(configDir)" }
 
-    init(provider: AgentProvider = .claude, name: String, configDir: String) {
+    init(provider: AgentProvider = .claude, name: String, configDir: String,
+         showOnExternalDisplays: Bool = true) {
         self.provider = provider
         self.name = name
         self.configDir = configDir
+        self.showOnExternalDisplays = showOnExternalDisplays
     }
 
     /// `.claudewho-personal` → "personal", `.claude` → "claude",
@@ -55,20 +61,24 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     }
 
     /// The list the poller (and thus the panel and the ESP32) actually uses:
-    /// ordered, minus disabled accounts, with custom names applied. Blank or
-    /// whitespace-only custom names fall back to the derived name.
+    /// ordered, minus disabled accounts, with custom names applied and each
+    /// account flagged for external displays unless its dir is in
+    /// `externalHiddenDirs`. Blank or whitespace-only custom names fall back
+    /// to the derived name.
     static func resolve(discovered: [UsageAccountConfig],
                         order: [String],
                         disabledDirs: Set<String>,
-                        customNames: [String: String]) -> [UsageAccountConfig] {
+                        customNames: [String: String],
+                        externalHiddenDirs: Set<String> = []) -> [UsageAccountConfig] {
         ordered(discovered: discovered, order: order)
             .filter { !disabledDirs.contains($0.configDir) }
             .map { account in
                 let custom = customNames[account.configDir]?
                     .trimmingCharacters(in: .whitespaces) ?? ""
-                return custom.isEmpty ? account
-                    : UsageAccountConfig(provider: account.provider, name: custom,
-                                         configDir: account.configDir)
+                return UsageAccountConfig(provider: account.provider,
+                                          name: custom.isEmpty ? account.name : custom,
+                                          configDir: account.configDir,
+                                          showOnExternalDisplays: !externalHiddenDirs.contains(account.configDir))
             }
     }
 }

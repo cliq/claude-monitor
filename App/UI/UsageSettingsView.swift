@@ -34,6 +34,11 @@ struct UsageSettingsView: View {
 
             Divider()
 
+            panelSection
+                .disabled(!preferences.usageMonitorEnabled)
+
+            Divider()
+
             bridgeSection
                 .disabled(!preferences.usageMonitorEnabled)
 
@@ -51,6 +56,17 @@ struct UsageSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
+                HStack(spacing: 8) {
+                    Text("Poll")
+                        .frame(width: Self.checkboxColumnWidth)
+                    Text("Account")
+                    Spacer(minLength: 0)
+                    Text("Widget · ESP32")
+                        .frame(width: Self.externalColumnWidth)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
                 List {
                     ForEach(accounts) { account in
                         accountRow(account)
@@ -64,7 +80,7 @@ struct UsageSettingsView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .frame(height: min(CGFloat(accounts.count), 5) * 30 + 8)
-                Text("Drag to reorder — the panel and external displays show accounts in this order. Unchecked accounts aren't polled. Leave the name empty to use the folder-derived default.")
+                Text("Drag to reorder — the panel and external displays show accounts in this order. Unpolled accounts don't appear anywhere. The right-hand checkmarks pick which accounts the widget and the ESP32 panel show (they fit three; the panel always shows every polled account). Leave the name empty to use the folder-derived default.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -72,11 +88,16 @@ struct UsageSettingsView: View {
         }
     }
 
+    private static let checkboxColumnWidth: CGFloat = 28
+    private static let externalColumnWidth: CGFloat = 84
+
     private func accountRow(_ account: UsageAccountConfig) -> some View {
-        HStack(spacing: 8) {
+        let polled = !preferences.disabledUsageAccountDirs.contains(account.configDir)
+        return HStack(spacing: 8) {
             Toggle("", isOn: enabledBinding(for: account))
                 .labelsHidden()
                 .toggleStyle(.checkbox)
+                .frame(width: Self.checkboxColumnWidth)
             TextField(account.name, text: nameBinding(for: account))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 140)
@@ -92,7 +113,27 @@ struct UsageSettingsView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
+            Toggle("", isOn: externalBinding(for: account))
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+                .frame(width: Self.externalColumnWidth)
+                .disabled(!polled)
+                .help("Show this account on the widget and the ESP32 panel")
         }
+    }
+
+    /// Disabled-list semantics, same as polling: checked = not hidden.
+    private func externalBinding(for account: UsageAccountConfig) -> Binding<Bool> {
+        Binding(
+            get: { !preferences.externalHiddenUsageAccountDirs.contains(account.configDir) },
+            set: { shown in
+                if shown {
+                    preferences.externalHiddenUsageAccountDirs.remove(account.configDir)
+                } else {
+                    preferences.externalHiddenUsageAccountDirs.insert(account.configDir)
+                }
+            }
+        )
     }
 
     /// Disabled-list semantics: checked = not in the disabled set.
@@ -121,6 +162,18 @@ struct UsageSettingsView: View {
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private var panelSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Usage panel").font(.subheadline.weight(.semibold))
+            Toggle("Compact layout", isOn: $preferences.usagePanelCompact)
+            Text("Shows each account on a single row with smaller numbers, so the panel takes about a third of the vertical space.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder

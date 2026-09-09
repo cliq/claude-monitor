@@ -51,8 +51,9 @@ struct UsageWidgetView: View {
             }
         default:
             VStack(alignment: .leading, spacing: 0) {
-                // Three rows is what the large family fits without clipping;
-                // Settings → Usage's drag order decides which three.
+                // Three rows is what the large family fits without clipping.
+                // The snapshot already holds only the accounts checked for
+                // external displays in Settings → Usage, in the user's order.
                 let accounts = Array(snapshot.accounts.prefix(3))
                 if accounts.isEmpty {
                     emptyState

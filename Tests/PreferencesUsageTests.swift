@@ -27,6 +27,8 @@ final class PreferencesUsageTests: XCTestCase {
         XCTAssertEqual(prefs.disabledUsageAccountDirs, [])
         XCTAssertEqual(prefs.usageAccountNames, [:])
         XCTAssertEqual(prefs.usageAccountOrder, [])
+        XCTAssertEqual(prefs.externalHiddenUsageAccountDirs, [])
+        XCTAssertFalse(prefs.usagePanelCompact)
     }
 
     func test_accountCustomizationsRoundTrip() {
@@ -35,12 +37,16 @@ final class PreferencesUsageTests: XCTestCase {
         prefs.disabledUsageAccountDirs = ["/h/.claudewho-b"]
         prefs.usageAccountNames = ["/h/.claudewho-a": "work"]
         prefs.usageAccountOrder = ["/h/.claudewho-b", "/h/.claudewho-a"]
+        prefs.externalHiddenUsageAccountDirs = ["/h/.claudewho-a"]
+        prefs.usagePanelCompact = true
 
         let reloaded = Preferences(defaults: defaults)
         XCTAssertTrue(reloaded.showUsagePanel)
         XCTAssertEqual(reloaded.disabledUsageAccountDirs, ["/h/.claudewho-b"])
         XCTAssertEqual(reloaded.usageAccountNames, ["/h/.claudewho-a": "work"])
         XCTAssertEqual(reloaded.usageAccountOrder, ["/h/.claudewho-b", "/h/.claudewho-a"])
+        XCTAssertEqual(reloaded.externalHiddenUsageAccountDirs, ["/h/.claudewho-a"])
+        XCTAssertTrue(reloaded.usagePanelCompact)
     }
 
     func test_usagePreferencesRoundTrip() {

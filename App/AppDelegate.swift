@@ -175,6 +175,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] in self?.repollUsageAccounts() }
             .store(in: &usageCancellables)
 
+        // Which accounts reach the widget / ESP32 is a pure filter over the
+        // last results — republish from cache instead of hitting the API.
+        preferences.$externalHiddenUsageAccountDirs
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.republishUsageAccounts() }
+            .store(in: &usageCancellables)
+
         // 6. First-run onboarding.
         if !preferences.hasOnboarded && ProcessInfo.processInfo.environment["CLAUDE_MONITOR_SKIP_ONBOARDING"] != "1" {
             presentOnboarding()
@@ -215,7 +223,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     UsageAccountConfig.resolve(discovered: UsageAccountConfig.discover(),
                                                order: prefs.usageAccountOrder,
                                                disabledDirs: prefs.disabledUsageAccountDirs,
-                                               customNames: prefs.usageAccountNames)
+                                               customNames: prefs.usageAccountNames,
+                                               externalHiddenDirs: prefs.externalHiddenUsageAccountDirs)
                 }, publish: { [weak self] snapshot in
                     guard let self else { return }
                     UsageSnapshotStore.write(snapshot)
@@ -247,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if wantBridge, usageBridge == nil, let poller = usagePoller {
             let prefs = preferences
-            let bridge = UsageBridgeServer(snapshot: { poller.snapshot() },
+            let bridge = UsageBridgeServer(snapshot: { poller.externalSnapshot() },
                                            display: { prefs.usageBridgeMirrorsDisplay ? poller.displayOn : true })
             do {
                 try bridge.start(port: desiredPort)
@@ -269,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if usagePanelWindow == nil {
-            usagePanelWindow = UsagePanelWindow(poller: poller, onUserClose: { [weak self] in
+            usagePanelWindow = UsagePanelWindow(poller: poller, preferences: preferences, onUserClose: { [weak self] in
                 self?.preferences.showUsagePanel = false
             })
         }
@@ -284,6 +293,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             guard preferences.usageMonitorEnabled, let poller = usagePoller else { return }
             Task { await poller.pollAll() }
+        }
+    }
+
+    private func republishUsageAccounts() {
+        MainActor.assumeIsolated {
+            guard preferences.usageMonitorEnabled, let poller = usagePoller else { return }
+            poller.republish()
         }
     }
 

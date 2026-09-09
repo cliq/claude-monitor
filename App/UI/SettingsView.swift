@@ -28,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("Push Notifications", systemImage: "bell.badge") }
 
             UsageSettingsView(preferences: preferences)
-                .frame(width: 560, height: 540)
+                .frame(width: 560, height: 600)
                 .tabItem { Label("Usage", systemImage: "gauge.with.needle") }
         }
     }

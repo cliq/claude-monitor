@@ -57,9 +57,9 @@ For Claude accounts the app reads each account's OAuth token from the Keychain (
 
 For Codex accounts (`~/.codex` and `~/.codexwho-*`) the app asks the Codex CLI itself via a short-lived `codex app-server` process — it never reads, refreshes, or copies Codex credentials. This requires the `codex` CLI on your machine and a ChatGPT sign-in (API-key logins are billed separately and expose no plan limits).
 
-Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns.
+Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns. If it takes too much room, **Settings → Usage → Compact layout** collapses each account to a single row.
 
-The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below.
+The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below. The **Widget · ESP32** checkmarks in Settings → Usage pick which accounts go to the widget and the LAN feed; the in-app panel always shows every polled account.
 
 ## ESP32 desk panel (optional)
 

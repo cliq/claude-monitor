@@ -1,7 +1,86 @@
 import XCTest
 @testable import ClaudeMonitor
 
+/// Counts fetches and answers with a fixed "ok" result named after the config,
+/// so tests can tell a real poll from a cache-only republish.
+private final class CountingFetcher: UsageFetching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _fetchCount = 0
+    var fetchCount: Int { lock.withLock { _fetchCount } }
+
+    func fetch(account: UsageAccountConfig) async throws -> AccountUsage {
+        lock.withLock { _fetchCount += 1 }
+        return AccountUsage(provider: account.provider, name: account.name, status: "ok",
+                            sessionPct: 40, weeklyPct: 20)
+    }
+}
+
 final class UsagePollerTests: XCTestCase {
+    // MARK: - external snapshot / republish
+
+    private let personal = UsageAccountConfig(name: "personal", configDir: "/h/.claudewho-personal")
+    private let work = UsageAccountConfig(name: "work", configDir: "/h/.claudewho-work",
+                                          showOnExternalDisplays: false)
+
+    @MainActor
+    func test_pollAll_publishesOnlyExternalAccounts_panelKeepsAll() async {
+        let fetcher = CountingFetcher()
+        var published: [UsageSnapshot] = []
+        let poller = UsagePoller(accountsProvider: { [self.personal, self.work] },
+                                 publish: { published.append($0) },
+                                 fetchers: [.claude: fetcher])
+
+        await poller.pollAll()
+
+        XCTAssertEqual(fetcher.fetchCount, 2)
+        XCTAssertEqual(poller.accounts.map(\.name), ["personal", "work"])
+        XCTAssertEqual(poller.snapshot().accounts.map(\.name), ["personal", "work"])
+        XCTAssertEqual(poller.externalSnapshot().accounts.map(\.name), ["personal"])
+        XCTAssertEqual(published.count, 1)
+        XCTAssertEqual(published.first?.accounts.map(\.name), ["personal"])
+        XCTAssertNotNil(published.first?.updatedAt)
+    }
+
+    @MainActor
+    func test_republish_reappliesFlagsAndNamesWithoutFetching() async {
+        let fetcher = CountingFetcher()
+        var configs = [personal, work]
+        var published: [UsageSnapshot] = []
+        let poller = UsagePoller(accountsProvider: { configs },
+                                 publish: { published.append($0) },
+                                 fetchers: [.claude: fetcher])
+        await poller.pollAll()
+        let updatedAt = poller.updatedAt
+
+        // User flips work on, personal off, and renames personal — all cache-only.
+        configs = [
+            UsageAccountConfig(name: "home", configDir: "/h/.claudewho-personal", showOnExternalDisplays: false),
+            UsageAccountConfig(name: "work", configDir: "/h/.claudewho-work"),
+        ]
+        poller.republish()
+
+        XCTAssertEqual(fetcher.fetchCount, 2, "republish must not hit the fetchers")
+        XCTAssertEqual(poller.accounts.map(\.name), ["home", "work"])
+        XCTAssertEqual(poller.externalSnapshot().accounts.map(\.name), ["work"])
+        XCTAssertEqual(published.last?.accounts.map(\.name), ["work"])
+        XCTAssertEqual(poller.updatedAt, updatedAt, "cached numbers are no fresher")
+    }
+
+    @MainActor
+    func test_republish_skipsAccountsNeverPolled() async {
+        let fetcher = CountingFetcher()
+        var configs = [personal]
+        let poller = UsagePoller(accountsProvider: { configs },
+                                 fetchers: [.claude: fetcher])
+        await poller.pollAll()
+
+        configs = [personal, work]
+        poller.republish()
+
+        XCTAssertEqual(poller.accounts.map(\.name), ["personal"])
+        XCTAssertEqual(fetcher.fetchCount, 1)
+    }
+
     // MARK: - summarize
 
     private func isoString(hoursFromNow hours: Double) -> String {

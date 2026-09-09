@@ -14,7 +14,7 @@ final class UsagePanelWindow {
     /// button — the owner uses it to flip `showUsagePanel` back off so the
     /// menu bar checkmark stays in sync. Programmatic `hide()` (orderOut)
     /// doesn't fire it.
-    init(poller: UsagePoller, onUserClose: @escaping () -> Void) {
+    init(poller: UsagePoller, preferences: Preferences, onUserClose: @escaping () -> Void) {
         let panel = NSPanel(contentRect: .zero,
                             styleMask: [.titled, .closable, .utilityWindow],
                             backing: .buffered, defer: false)
@@ -27,7 +27,7 @@ final class UsagePanelWindow {
         // on, across app switches, Spaces, and full-screen apps.
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentViewController = NSHostingController(rootView: UsagePanelView(poller: poller))
+        panel.contentViewController = NSHostingController(rootView: UsagePanelView(poller: poller, preferences: preferences))
         panel.setFrameAutosaveName("UsagePanelWindow")
         self.window = panel
         closeObserver = NotificationCenter.default.addObserver(

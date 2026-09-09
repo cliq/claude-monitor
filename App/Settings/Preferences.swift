@@ -111,6 +111,20 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(usageAccountOrder, forKey: Self.usageAccountOrderKey) }
     }
 
+    /// Config-dir paths kept off external displays (the widget and the LAN
+    /// bridge / ESP32 panel) while still polled and shown in the usage panel.
+    /// Disabled-list semantics: the default empty set shows every polled
+    /// account externally — the historical behavior.
+    @Published var externalHiddenUsageAccountDirs: Set<String> {
+        didSet { defaults.set(externalHiddenUsageAccountDirs.sorted(), forKey: Self.externalHiddenUsageAccountsKey) }
+    }
+
+    /// When true, the floating usage panel uses a denser single-row-per-account
+    /// layout that takes roughly a third of the vertical space.
+    @Published var usagePanelCompact: Bool {
+        didSet { defaults.set(usagePanelCompact, forKey: Self.usagePanelCompactKey) }
+    }
+
     /// The app build (`CFBundleVersion`) we last refreshed the on-disk hooks for.
     /// Drives the "refresh hooks once per app update" check in `AppDelegate`.
     @Published var lastHookRefreshBuild: String? {
@@ -162,6 +176,8 @@ final class Preferences: ObservableObject {
     private static let disabledUsageAccountsKey = "disabledUsageAccountDirs"
     private static let usageAccountNamesKey = "usageAccountNames"
     private static let usageAccountOrderKey = "usageAccountOrder"
+    private static let externalHiddenUsageAccountsKey = "externalHiddenUsageAccountDirs"
+    private static let usagePanelCompactKey = "usagePanelCompact"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -199,6 +215,8 @@ final class Preferences: ObservableObject {
         self.disabledUsageAccountDirs = Set(defaults.stringArray(forKey: Self.disabledUsageAccountsKey) ?? [])
         self.usageAccountNames = (defaults.dictionary(forKey: Self.usageAccountNamesKey) as? [String: String]) ?? [:]
         self.usageAccountOrder = defaults.stringArray(forKey: Self.usageAccountOrderKey) ?? []
+        self.externalHiddenUsageAccountDirs = Set(defaults.stringArray(forKey: Self.externalHiddenUsageAccountsKey) ?? [])
+        self.usagePanelCompact = defaults.bool(forKey: Self.usagePanelCompactKey)
 
         self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
         self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)

@@ -67,6 +67,22 @@ final class UsageModelsTests: XCTestCase {
         XCTAssertEqual(out.map(\.name), ["a", "c"])
     }
 
+    func test_resolve_flagsAccountsForExternalDisplays() {
+        let out = UsageAccountConfig.resolve(discovered: [a, b, c], order: [],
+                                             disabledDirs: [],
+                                             customNames: [:],
+                                             externalHiddenDirs: ["/h/.claudewho-b"])
+        XCTAssertEqual(out.map(\.showOnExternalDisplays), [true, false, true])
+        // Hidden externally still means polled and shown in the panel.
+        XCTAssertEqual(out.map(\.name), ["a", "b", "c"])
+    }
+
+    func test_resolve_defaultsToShowingEveryAccountExternally() {
+        let out = UsageAccountConfig.resolve(discovered: [a, b], order: [],
+                                             disabledDirs: [], customNames: [:])
+        XCTAssertEqual(out.map(\.showOnExternalDisplays), [true, true])
+    }
+
     func test_resolve_appliesCustomNames() {
         let out = UsageAccountConfig.resolve(discovered: [a, b], order: [],
                                              disabledDirs: [],

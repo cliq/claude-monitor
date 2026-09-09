@@ -10,6 +10,11 @@ import CoreGraphics
 /// single consistent snapshot publication; per-provider collection lives in
 /// the `UsageFetching` implementations. Errors are isolated per account so
 /// one failed Codex process never suppresses successful Claude results.
+///
+/// Two views of the same results exist: `accounts`/`snapshot()` hold every
+/// polled account (the in-app panel), while `externalSnapshot()` — what gets
+/// published to the widget and served to the LAN bridge / ESP32 — only
+/// includes accounts whose config is flagged `showOnExternalDisplays`.
 @MainActor
 final class UsagePoller: ObservableObject {
     @Published var accounts: [AccountUsage] = []
@@ -26,6 +31,11 @@ final class UsagePoller: ObservableObject {
     private var pollTimer: Timer?
     private var displayTimer: Timer?
     private var isPolling = false
+    /// Last poll's results keyed by config dir, so `republish()` can re-apply
+    /// changed account preferences (names, order, external flags) without a
+    /// network round-trip — the Anthropic endpoint 429s on rapid re-polls.
+    private var lastResultsByDir: [String: AccountUsage] = [:]
+    private var externalAccounts: [AccountUsage] = []
 
     init(accountsProvider: @escaping () -> [UsageAccountConfig] = { UsageAccountConfig.discover() },
          publish: @escaping (UsageSnapshot) -> Void = { _ in },
@@ -57,9 +67,17 @@ final class UsagePoller: ObservableObject {
         displayTimer = nil
     }
 
+    /// Every polled account — what the in-app usage panel shows.
     func snapshot() -> UsageSnapshot {
         let fmt = ISO8601DateFormatter()
         return UsageSnapshot(updatedAt: updatedAt.map { fmt.string(from: $0) }, accounts: accounts)
+    }
+
+    /// Only the accounts checked for external displays in Settings → Usage.
+    /// Served by `UsageBridgeServer` and handed to `publish` for the widget.
+    func externalSnapshot() -> UsageSnapshot {
+        let fmt = ISO8601DateFormatter()
+        return UsageSnapshot(updatedAt: updatedAt.map { fmt.string(from: $0) }, accounts: externalAccounts)
     }
 
     func pollAll() async {
@@ -72,23 +90,45 @@ final class UsagePoller: ObservableObject {
         // Re-discover on every cycle so logins added/removed while the app is
         // running show up without a restart.
         let configs = accountsProvider()
-        var results: [AccountUsage] = []
+        var results: [(config: UsageAccountConfig, usage: AccountUsage)] = []
         for config in configs {
             guard let fetcher = fetchers[config.provider] else { continue }
             do {
-                results.append(try await fetcher.fetch(account: config))
+                results.append((config, try await fetcher.fetch(account: config)))
             } catch {
                 var failed = AccountUsage(provider: config.provider, name: config.name, status: "error")
                 failed.error = String(error.localizedDescription.prefix(200))
-                results.append(failed)
+                results.append((config, failed))
             }
         }
-        accounts = results
+        lastResultsByDir = Dictionary(results.map { ($0.config.configDir, $0.usage) },
+                                      uniquingKeysWith: { first, _ in first })
+        apply(results)
         updatedAt = Date()
         // @Published emits on willSet, so an external Combine sink observing
         // `accounts`/`updatedAt` individually could pair new accounts with the
         // old timestamp; publish only after both fields are consistent.
-        publish(snapshot())
+        publish(externalSnapshot())
+    }
+
+    /// Re-applies the current account preferences to the last poll's results
+    /// and republishes, without fetching. Accounts that have never been polled
+    /// (newly enabled) are skipped until the next `pollAll()`; `updatedAt` is
+    /// left alone because the numbers are not fresher than before.
+    func republish() {
+        let configs = accountsProvider()
+        let results: [(config: UsageAccountConfig, usage: AccountUsage)] = configs.compactMap { config in
+            guard var usage = lastResultsByDir[config.configDir] else { return nil }
+            usage.name = config.name
+            return (config, usage)
+        }
+        apply(results)
+        publish(externalSnapshot())
+    }
+
+    private func apply(_ results: [(config: UsageAccountConfig, usage: AccountUsage)]) {
+        accounts = results.map { $0.usage }
+        externalAccounts = results.filter { $0.config.showOnExternalDisplays }.map { $0.usage }
     }
 
     // Thin forwarders so existing call sites (and `Tests/UsagePollerTests.swift`)

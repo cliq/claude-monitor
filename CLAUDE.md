@@ -60,11 +60,15 @@ UsageAccountConfig.discover() — Claude dirs via ConfigDirectoryDiscovery.scan(
         `codex app-server --listen stdio://` with CODEX_HOME=<configDir>,
         calls account/rateLimits/read (JSONL, 10s timeout), maps via
         CodexUsageMapper; never reads/refreshes Codex credentials
-  → UsagePanelView (menu bar → "Open Usage Panel")
+  → UsagePanelView (menu bar → "Open Usage Panel") — every polled account
+    (`poller.accounts`); Settings → Usage "Compact layout" flips it to a
+    one-row-per-account rendering (`usagePanelCompact`)
   → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
-    the ESP32 desk panel (esp32-claude-monitor firmware)
+    the ESP32 desk panel (esp32-claude-monitor firmware); serves
+    `poller.externalSnapshot()`
   → UsageSnapshotStore — usage-snapshot.json in the App Group container,
-    written after each poll (UsagePoller's injected `publish` hook)
+    written after each poll (UsagePoller's injected `publish` hook, which
+    also receives the external snapshot)
   → ClaudeMonitorWidget.appex — sandboxed WidgetKit extension; TimelineProvider
     reads the snapshot file, WidgetCenter reloads are triggered by the app
 ```
@@ -72,6 +76,16 @@ UsageAccountConfig.discover() — Claude dirs via ConfigDirectoryDiscovery.scan(
 The Anthropic usage endpoint is undocumented/community-discovered: it requires a `claude-code/…` User-Agent and a ≥180s interval, otherwise it 429s. `ClaudeCodeKeychain` goes through the `security` CLI (not SecItemCopyMatching) because Claude Code creates its items with that binary, so `security` is on their ACL and access never prompts. The credential payload holds more than `claudeAiOauth` (e.g. `mcpOAuth`) — only the three token fields are mutated on refresh; round-trip everything else verbatim. `AccountUsage`'s snake_case coding keys are the wire schema the ESP32 firmware parses **and** the widget's snapshot file — never rename or remove keys, additive changes only (`*_resets_at`, `schema_version`, and the v2 `provider`/`metrics` keys were added this way; the firmware's per-key parser ignores unknown keys). `UsagePoller.summarize`/`formatReset` forward to the pure statics in `UsageFormat` (`App/Core/Usage/UsageFormatting.swift`); keep all of them (and `CodexUsageMapper`) `nonisolated` pure for the tests.
 
 Codex specifics: `AccountUsage.metrics` (`[UsageMetric]`) is the authoritative list the panel/widget render (`displayMetrics` falls back to the legacy session/weekly/model trio for Claude accounts and schema-v1 snapshots); the flat `session_*`/`weekly_*`/`model_*` fields are populated as an adapter (shortest ordinary window → session, ~7-day window → weekly, monthly/individual spend limit → model). `CodexUsageMapper` labels windows from `limitName` or duration only — `MONTHLY` requires a month-boundary reset (else `INDIVIDUAL`), other durations get neutral labels like `30D`, never guessed product names. The app-server response is read via `CodexResponseAccumulator` (fragmented-line/notification/ID-correlation tolerant — tested without spawning processes); stderr and error strings are capped, stdout is never logged wholesale, and the monitor must never redeem Codex reset credits. Codex usage needs a ChatGPT sign-in; API-key logins surface an actionable per-account error. `AccountUsage.id` and `UsageAccountConfig.id` are provider-qualified (same display name across providers must not collide), while preferences stay keyed by `configDir`. An opt-in integration smoke test runs the real CLI: `TEST_RUNNER_CODEX_USAGE_INTEGRATION=1` + `-only-testing:ClaudeMonitorTests/CodexUsageTests`.
+
+External displays (widget + bridge/ESP32) only receive accounts the user has
+checked in the "Widget · ESP32" column of Settings → Usage. The preference is
+`externalHiddenUsageAccountDirs` (disabled-list semantics, so the default shows
+everything and the widget/firmware still cap at three rows themselves);
+`UsageAccountConfig.resolve` turns it into `showOnExternalDisplays`, and
+`UsagePoller` keeps the full list in `accounts` while `externalSnapshot()`
+filters. Flipping that checkbox calls `UsagePoller.republish()`, which re-applies
+the current configs to the cached results without fetching — never route it
+through `pollAll()`, the Anthropic endpoint 429s on rapid re-polls.
 
 ### Usage widget
 
