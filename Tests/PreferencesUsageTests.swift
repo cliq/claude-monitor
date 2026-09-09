@@ -31,6 +31,35 @@ final class PreferencesUsageTests: XCTestCase {
         XCTAssertFalse(prefs.usagePanelCompact)
     }
 
+    func test_usagePanelFrameRoundTripAndLegacySeed() {
+        let prefs = Preferences(defaults: defaults)
+        XCTAssertNil(prefs.usagePanelWindowFrame)
+        prefs.usagePanelWindowFrame = NSRect(x: -1882, y: 1265, width: 480, height: 373)
+        XCTAssertEqual(Preferences(defaults: defaults).usagePanelWindowFrame,
+                       NSRect(x: -1882, y: 1265, width: 480, height: 373))
+        prefs.usagePanelWindowFrame = nil
+        XCTAssertNil(Preferences(defaults: defaults).usagePanelWindowFrame)
+
+        // Upgrading from the autosave-based panel keeps the position AppKit had
+        // recorded (window rect followed by the screen rect).
+        defaults.set("-1882 1265 480 373 -1920 612 1920 1050 ", forKey: Preferences.legacyUsagePanelAutosaveKey)
+        XCTAssertEqual(Preferences(defaults: defaults).usagePanelWindowFrame,
+                       NSRect(x: -1882, y: 1265, width: 480, height: 373))
+        XCTAssertNil(Preferences.parseLegacyAutosaveFrame("garbage"))
+        XCTAssertNil(Preferences.parseLegacyAutosaveFrame("0 0 0 0 0 0 1920 1050"))
+    }
+
+    func test_usagePanelRestoredTopLeft() {
+        let left = NSRect(x: -1920, y: 612, width: 1920, height: 1050)
+        let main = NSRect(x: 0, y: 0, width: 2560, height: 1440)
+        let saved = NSRect(x: -1882, y: 1265, width: 480, height: 373)
+        XCTAssertNil(UsagePanelWindow.restoredTopLeft(saved: nil, screens: [main]))
+        // Saved screen disconnected → nil, caller centers instead.
+        XCTAssertNil(UsagePanelWindow.restoredTopLeft(saved: saved, screens: [main]))
+        XCTAssertEqual(UsagePanelWindow.restoredTopLeft(saved: saved, screens: [left, main]),
+                       NSPoint(x: -1882, y: 1638))
+    }
+
     func test_accountCustomizationsRoundTrip() {
         let prefs = Preferences(defaults: defaults)
         prefs.showUsagePanel = true

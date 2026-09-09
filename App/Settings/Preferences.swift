@@ -150,6 +150,19 @@ final class Preferences: ObservableObject {
         }
     }
 
+    /// Last known usage-panel frame (screen coordinates). Managed manually for the
+    /// same reason as `dashboardWindowFrame`: the floating panel's autosave entry
+    /// was written on every drag but never restored the position on relaunch.
+    @Published var usagePanelWindowFrame: NSRect? {
+        didSet {
+            if let frame = usagePanelWindowFrame {
+                defaults.set(NSStringFromRect(frame), forKey: Self.usagePanelFrameKey)
+            } else {
+                defaults.removeObject(forKey: Self.usagePanelFrameKey)
+            }
+        }
+    }
+
     var hasOnboarded: Bool {
         get { defaults.bool(forKey: Self.onboardedKey) }
         set { defaults.set(newValue, forKey: Self.onboardedKey) }
@@ -163,6 +176,10 @@ final class Preferences: ObservableObject {
     private static let paletteKey           = "paletteID"
     private static let disabledTerminalsKey = "disabledTerminals"
     private static let dashboardFrameKey    = "dashboardWindowFrame"
+    private static let usagePanelFrameKey   = "usagePanelWindowFrame"
+    /// Key AppKit used while the panel relied on `setFrameAutosaveName` — read once
+    /// as a seed so upgrading keeps the position the user already chose.
+    static let legacyUsagePanelAutosaveKey  = "NSWindow Frame UsagePanelWindow"
     private static let showWindowKey        = "showDashboardWindow"
     private static let prowlEnabledKey      = "prowlEnabled"
     private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
@@ -178,6 +195,14 @@ final class Preferences: ObservableObject {
     private static let usageAccountOrderKey = "usageAccountOrder"
     private static let externalHiddenUsageAccountsKey = "externalHiddenUsageAccountDirs"
     private static let usagePanelCompactKey = "usagePanelCompact"
+
+    /// AppKit's autosave format is "x y w h screenX screenY screenW screenH";
+    /// only the leading window rect matters here.
+    nonisolated static func parseLegacyAutosaveFrame(_ encoded: String) -> NSRect? {
+        let numbers = encoded.split(whereSeparator: { $0 == " " }).compactMap { Double($0) }
+        guard numbers.count >= 4, numbers[2] > 0, numbers[3] > 0 else { return nil }
+        return NSRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -196,6 +221,12 @@ final class Preferences: ObservableObject {
         if let encoded = defaults.string(forKey: Self.dashboardFrameKey) {
             let rect = NSRectFromString(encoded)
             self.dashboardWindowFrame = rect.isEmpty ? nil : rect
+        }
+        if let encoded = defaults.string(forKey: Self.usagePanelFrameKey) {
+            let rect = NSRectFromString(encoded)
+            self.usagePanelWindowFrame = rect.isEmpty ? nil : rect
+        } else if let legacy = defaults.string(forKey: Self.legacyUsagePanelAutosaveKey) {
+            self.usagePanelWindowFrame = Self.parseLegacyAutosaveFrame(legacy)
         }
 
         // `object(forKey:) as? Bool` (not `bool(forKey:)`) so a missing key
