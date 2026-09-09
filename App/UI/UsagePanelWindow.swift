@@ -15,6 +15,12 @@ final class UsagePanelWindow {
     private var closeObserver: NSObjectProtocol?
     private var frameObservers: [NSObjectProtocol] = []
     private var needsFrameRestore = true
+    /// Where the panel's top-left corner should stay. The panel isn't user-
+    /// resizable, so every resize comes from SwiftUI content (accounts coming
+    /// and going, the first layout after launch) — and AppKit keeps the
+    /// bottom-left corner fixed through those, which would walk the title bar
+    /// up and down the screen. Re-anchoring after each resize keeps it put.
+    private var anchoredTopLeft: NSPoint?
 
     /// `onUserClose` fires when the user closes the panel with its close
     /// button — the owner uses it to flip `showUsagePanel` back off so the
@@ -61,6 +67,7 @@ final class UsagePanelWindow {
             } else {
                 window.center()
             }
+            anchoredTopLeft = topLeft(of: window.frame)
         }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -75,18 +82,24 @@ final class UsagePanelWindow {
         return NSPoint(x: saved.minX, y: saved.maxY)
     }
 
+    private func topLeft(of frame: NSRect) -> NSPoint { NSPoint(x: frame.minX, y: frame.maxY) }
+
     /// Same rule as the dashboard: persist only user drags (mouse button held).
     /// AppKit also fires `didMove` for display changes and our own
     /// `setFrameTopLeftPoint`, which must not overwrite the chosen position.
     private func observeFrameChanges() {
-        let record: (Notification) -> Void = { [weak self] _ in
-            guard let self, NSEvent.pressedMouseButtons != 0 else { return }
-            self.preferences.usagePanelWindowFrame = self.window.frame
-        }
         let center = NotificationCenter.default
         frameObservers = [
-            center.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main, using: record),
-            center.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main, using: record),
+            center.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak self] _ in
+                guard let self, NSEvent.pressedMouseButtons != 0 else { return }
+                self.preferences.usagePanelWindowFrame = self.window.frame
+                self.anchoredTopLeft = self.topLeft(of: self.window.frame)
+            },
+            center.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self] _ in
+                guard let self, let anchor = self.anchoredTopLeft,
+                      self.topLeft(of: self.window.frame) != anchor else { return }
+                self.window.setFrameTopLeftPoint(anchor)
+            },
         ]
     }
 
