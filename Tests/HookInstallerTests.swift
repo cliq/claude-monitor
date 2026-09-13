@@ -35,11 +35,37 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(status.installedVersion, 0)
     }
 
-    func test_inspectReportsInstalledForCurrentVersionFixture() throws {
-        _ = try writeSettings("settings-with-managed-v3")
+    func test_inspectReportsInstalledForCurrentVersion() throws {
+        try HookInstaller.install(configDir: dir)
         let status = try HookInstaller.inspect(configDir: dir)
         XCTAssertEqual(status.status, .installed)
         XCTAssertEqual(status.installedVersion, HookInstaller.currentVersion)
+    }
+
+    func test_upgradeFromV3InstallsToolProgressHookThroughMaintenance() throws {
+        _ = try writeSettings("settings-with-managed-v3")
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .outdated)
+        let refreshed = HookMaintenance.reinstallOutdated(
+            managedDirs: [dir],
+            inspect: { try HookInstaller.inspect(configDir: $0).status },
+            install: { try HookInstaller.install(configDir: $0) })
+        XCTAssertEqual(refreshed, [dir])
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .installed)
+        let json = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: dir.appendingPathComponent("settings.json"))) as! [String: Any]
+        let hooks = try XCTUnwrap(json["hooks"] as? [String: Any])
+        XCTAssertNotNil(hooks["PostToolUse"])
+    }
+
+    func test_missingCurrentVersionHookStillReportsExternalModification() throws {
+        try HookInstaller.install(configDir: dir)
+        let url = dir.appendingPathComponent("settings.json")
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        var hooks = try XCTUnwrap(json["hooks"] as? [String: Any])
+        hooks.removeValue(forKey: "PostToolUse")
+        json["hooks"] = hooks
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .modifiedExternally)
     }
 
     func test_inspectReportsOutdatedForV1Fixture() throws {
@@ -71,17 +97,17 @@ final class HookInstallerTests: XCTestCase {
                        "no `--version=N` arg and no sidecar means we don't know the prior version")
     }
 
-    func test_installAddsAllFiveHooksWithClaudeCodeHookSchema() throws {
+    func test_installAddsAllHooksWithClaudeCodeHookSchema() throws {
         let path = try writeSettings("settings-empty")
         try HookInstaller.install(configDir: dir)
         let after = try JSONSerialization.jsonObject(with: Data(contentsOf: path)) as! [String: Any]
         let hooks = try XCTUnwrap(after["hooks"] as? [String: Any])
-        XCTAssertEqual(Set(hooks.keys), ["SessionStart","UserPromptSubmit","Stop","Notification","SessionEnd"])
+        XCTAssertEqual(Set(hooks.keys), ["SessionStart","UserPromptSubmit","PostToolUse","Stop","Notification","SessionEnd"])
 
         // Each managed entry must be a matcher-level object carrying
         //   { _managedBy, _version, matcher, hooks: [{ type, command }] }
         // where `hooks: []` is what Claude Code's validator requires.
-        for name in ["SessionStart","UserPromptSubmit","Stop","Notification","SessionEnd"] {
+        for name in ["SessionStart","UserPromptSubmit","PostToolUse","Stop","Notification","SessionEnd"] {
             let entries = try XCTUnwrap(hooks[name] as? [[String: Any]])
             XCTAssertEqual(entries.count, 1, "\(name) should have exactly one managed entry")
             let entry = entries[0]
@@ -127,7 +153,7 @@ final class HookInstallerTests: XCTestCase {
         try HookInstaller.install(configDir: dir)
         let after = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("settings.json"))) as! [String: Any]
         let hooks = try XCTUnwrap(after["hooks"] as? [String: Any])
-        for key in ["SessionStart","UserPromptSubmit","Stop","Notification","SessionEnd"] {
+        for key in ["SessionStart","UserPromptSubmit","PostToolUse","Stop","Notification","SessionEnd"] {
             let entries = hooks[key] as! [[String: Any]]
             XCTAssertEqual(entries.count, 1, "\(key) should have exactly one managed entry")
         }
@@ -216,9 +242,10 @@ final class HookInstallerTests: XCTestCase {
 
     func test_installOfflineHookLeavesMainHookIntact() throws {
         let url = try writeSettings("settings-with-managed-v3")
+        let originalStatus = try HookInstaller.inspect(configDir: dir)
         try HookInstaller.installOfflineHook(configDir: dir)
 
-        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .installed,
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir), originalStatus,
                        "main hook entry must still be detected")
         XCTAssertEqual(try HookInstaller.inspectOfflineHook(configDir: dir).status, .installed)
         // Sanity-check the file has both managed blocks for Stop.
@@ -229,9 +256,10 @@ final class HookInstallerTests: XCTestCase {
 
     func test_uninstallOfflineHookLeavesMainHookIntact() throws {
         _ = try writeSettings("settings-with-managed-main-and-offline")
+        let originalStatus = try HookInstaller.inspect(configDir: dir)
         try HookInstaller.uninstallOfflineHook(configDir: dir)
 
-        XCTAssertEqual(try HookInstaller.inspect(configDir: dir).status, .installed)
+        XCTAssertEqual(try HookInstaller.inspect(configDir: dir), originalStatus)
         XCTAssertEqual(try HookInstaller.inspectOfflineHook(configDir: dir).status, .notInstalled)
     }
 }

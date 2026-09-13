@@ -98,6 +98,39 @@ final class CodexHookScriptTests: XCTestCase {
         XCTAssertNil(event, "an unidentifiable session must not create a phantom card")
     }
 
+    func test_compactionSourceReachesStoreWithoutResettingWorking() async throws {
+        let received = try await runScript(hook: "SessionStart",
+            stdin: #"{"session_id":"s","source":"compact"}"#)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.source, "compact")
+        let store = SessionStore(clock: FakeClock())
+        store.apply(HookEvent(hook: .userPromptSubmit, sessionId: "codex:s", tty: "", pid: 1,
+                              cwd: "/", ts: 0, promptPreview: "Work", toolName: nil,
+                              notificationType: nil, message: nil, provider: .codex))
+        store.apply(event)
+        XCTAssertEqual(store.orderedSessions[0].state, .working)
+        XCTAssertEqual(store.orderedSessions[0].lastPromptPreview, "Work")
+    }
+
+    func test_toolOutputRestoresWorkingAfterApprovalWithoutChangingPreview() async throws {
+        let received = try await runScript(hook: "PostToolUse",
+            stdin: #"{"session_id":"s","tool_name":"Bash","tool_response":"done","prompt":"must not replace the user prompt"}"#)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.hook, .postToolUse)
+        XCTAssertEqual(event.toolName, "Bash")
+        XCTAssertNil(event.promptPreview)
+        XCTAssertEqual(StateMachine.transition(from: .needsYou, for: event.hook), .working)
+    }
+
+    func test_largeToolOutputDoesNotExceedProcessEnvironmentLimit() async throws {
+        let stdin = "{\"session_id\":\"s\",\"tool_name\":\"Bash\",\"tool_response\":\""
+            + String(repeating: "x", count: 300_000) + "\"}"
+        let received = try await runScript(hook: "PostToolUse", stdin: stdin)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.hook, .postToolUse)
+        XCTAssertEqual(event.toolName, "Bash")
+    }
+
     /// Resolve the codex-hook.sh location — bundled test resource first, repo fallback.
     private func findScript() -> URL? {
         if let inBundle = Bundle(for: Self.self).url(forResource: "codex-hook", withExtension: "sh") {

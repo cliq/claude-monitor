@@ -1,6 +1,6 @@
 #!/bin/bash
 # claude-monitor Codex hook — installed to ~/.claude-monitor/codex-hook.sh
-# Invoked by Codex CLI for SessionStart, UserPromptSubmit, Stop, PermissionRequest, SessionEnd.
+# Invoked for SessionStart, UserPromptSubmit, PostToolUse, Stop, PermissionRequest, SessionEnd.
 # Normalizes each Codex event into Claude Monitor's event vocabulary
 # (PermissionRequest becomes Notification/permission_prompt), namespaces the
 # session id as "codex:<id>", and POSTs to the local Claude Monitor server.
@@ -35,14 +35,15 @@ esac
 PID_VAL="$PPID"   # the codex process that invoked us
 CWD_VAL="$(pwd)"
 TS_VAL="$(date +%s)"
-export HOOK_NAME STDIN_JSON TTY_VAL PID_VAL CWD_VAL TS_VAL
+export HOOK_NAME TTY_VAL PID_VAL CWD_VAL TS_VAL
 
 # Build JSON — use python for safe escaping if available, otherwise a minimal fallback.
 if command -v python3 >/dev/null 2>&1; then
-  PAYLOAD="$(PYTHONIOENCODING=utf-8 python3 - <<PY
+  # Tool results can exceed the OS environment-size limit. Pipe the JSON instead.
+  PAYLOAD="$(printf '%s' "$STDIN_JSON" | PYTHONIOENCODING=utf-8 python3 -c '
 import json, os, sys
 try:
-    src = json.loads(os.environ.get("STDIN_JSON") or "{}")
+    src = json.load(sys.stdin)
 except Exception:
     src = {}
 sid = src.get("session_id")
@@ -57,14 +58,15 @@ out = {
     "cwd":             src.get("cwd") or os.environ.get("CWD_VAL", ""),
     "ts":              int(os.environ.get("TS_VAL", "0")),
 }
+source = src.get("source")
+if hook == "SessionStart" and isinstance(source, str):
+    out["source"] = source
 tool = src.get("tool_name")
 if isinstance(tool, str):
     out["tool_name"] = tool
 if hook == "PermissionRequest":
     # Normalize to the Notification/permission_prompt shape the dashboard already
     # understands, so the state machine and push pipeline work unchanged.
-    # (No apostrophes anywhere in this heredoc: macOS bash 3.2 quote-scans
-    # heredoc content inside command substitution and chokes on unbalanced ones.)
     out["hook"] = "Notification"
     out["notification_type"] = "permission_prompt"
     msg = src.get("message")
@@ -74,16 +76,18 @@ if hook == "PermissionRequest":
 else:
     out["hook"] = hook
     preview = src.get("prompt") or src.get("user_prompt")
-    if isinstance(preview, str):
+    if hook == "UserPromptSubmit" and isinstance(preview, str):
         out["prompt_preview"] = preview[:120]
 print(json.dumps(out))
-PY
+'
 )"
   [ -n "$PAYLOAD" ] || exit 0
 else
   # Minimal fallback: no prompt_preview, best-effort.
   SID="$(echo "$STDIN_JSON" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
   [ -n "$SID" ] || exit 0
+  SOURCE="$(printf '%s' "$STDIN_JSON" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  case "$SOURCE" in startup|resume|clear|compact) ;; *) SOURCE="" ;; esac
   if [ "$HOOK_NAME" = "PermissionRequest" ]; then
     PAYLOAD=$(cat <<EOF
 {"hook":"Notification","provider":"codex","session_id":"codex:$SID","tty":"$TTY_VAL","pid":$PID_VAL,"cwd":"$CWD_VAL","ts":$TS_VAL,"notification_type":"permission_prompt","message":"Codex needs permission"}
@@ -91,7 +95,7 @@ EOF
 )
   else
     PAYLOAD=$(cat <<EOF
-{"hook":"$HOOK_NAME","provider":"codex","session_id":"codex:$SID","tty":"$TTY_VAL","pid":$PID_VAL,"cwd":"$CWD_VAL","ts":$TS_VAL}
+{"hook":"$HOOK_NAME","provider":"codex","session_id":"codex:$SID","tty":"$TTY_VAL","pid":$PID_VAL,"cwd":"$CWD_VAL","ts":$TS_VAL,"source":"$SOURCE"}
 EOF
 )
   fi

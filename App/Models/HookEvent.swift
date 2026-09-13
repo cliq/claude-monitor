@@ -3,6 +3,7 @@ import Foundation
 enum HookName: String, Codable {
     case sessionStart     = "SessionStart"
     case userPromptSubmit = "UserPromptSubmit"
+    case postToolUse      = "PostToolUse"
     case stop             = "Stop"
     case notification     = "Notification"
     case sessionEnd       = "SessionEnd"
@@ -21,12 +22,14 @@ struct HookEvent: Codable, Equatable {
     let message: String?
     let backgroundTasksActive: Int?
     let provider: AgentProvider
+    let source: String?
 
     init(hook: HookName, sessionId: String, tty: String, pid: Int32, cwd: String,
          ts: Int, promptPreview: String?, toolName: String?,
          notificationType: String?, message: String?,
          backgroundTasksActive: Int? = nil,
-         provider: AgentProvider = .claude) {
+         provider: AgentProvider = .claude,
+         source: String? = nil) {
         self.hook = hook
         self.sessionId = sessionId
         self.tty = tty
@@ -39,6 +42,7 @@ struct HookEvent: Codable, Equatable {
         self.message = message
         self.backgroundTasksActive = backgroundTasksActive
         self.provider = provider
+        self.source = source
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +60,7 @@ struct HookEvent: Codable, Equatable {
         backgroundTasksActive = try c.decodeIfPresent(Int.self, forKey: .backgroundTasksActive)
         // Absent for payloads from hook.sh versions that predate provider tagging.
         provider = try c.decodeIfPresent(AgentProvider.self, forKey: .provider) ?? .claude
+        source = try c.decodeIfPresent(String.self, forKey: .source)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -71,5 +76,6 @@ struct HookEvent: Codable, Equatable {
         case message
         case backgroundTasksActive = "background_tasks_active"
         case provider
+        case source
     }
 }

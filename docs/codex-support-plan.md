@@ -8,19 +8,20 @@ Codex provides the lifecycle events needed to mirror the existing Claude Code pi
 
 ## Event mapping
 
-`codex-hook.sh` normalizes every Codex event into the dashboard's existing closed event vocabulary (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`) before POSTing. Codex has no `Notification` hook of its own; **Needs you** and the permission push are produced entirely by this normalization, so `StateMachine`, `PushNotifier`, and their table-driven tests stay untouched.
+`codex-hook.sh` normalizes every Codex event into the dashboard's shared event vocabulary (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `Notification`, `SessionEnd`) before POSTing. Codex has no `Notification` hook of its own; **Needs you** and the permission push are produced entirely by this normalization. The state machine handles both providers the same way.
 
 | Codex event | Normalized event posted | Dashboard behavior | Push notification |
 | --- | --- | --- | --- |
-| `SessionStart` | `SessionStart` | Create the card in **Waiting** | None |
+| `SessionStart` | `SessionStart`, including `source` | Preserve existing state for `compact`; otherwise **Waiting** | None |
 | `UserPromptSubmit` | `UserPromptSubmit` | Set the card to **Working** | None |
+| `PostToolUse` | `PostToolUse` | Restore **Working**, keeping the prompt preview | None |
 | `Stop` | `Stop` | Set the card to **Waiting** | “Done” |
 | `PermissionRequest` | `Notification` with `notification_type=permission_prompt` | Set the card to **Needs you** | “Permission needed” |
 | `SessionEnd` | `SessionEnd` | Remove the card | None |
 
 Codex `Stop` never posts `background_tasks` — that payload shape is a Claude Code detail — so a Codex `Stop` always lands in plain **Waiting**, never `backgroundWorking`.
 
-We can optionally use `PreToolUse` and `PostToolUse` around `request_user_input` and approval-related tools. This would let a card enter **Needs you** while Codex awaits an answer and return to **Working** after the user responds (e.g. by normalizing `PostToolUse` to `UserPromptSubmit` without a prompt preview — to be validated in Phase 2).
+As of hook schema v2, `PostToolUse` restores **Working** after a tool produces output. `SessionStart.source` is forwarded so mid-turn compaction does not reset an active card to **Waiting**. Claude uses the same behavior starting with hook schema v4.
 
 ## Recommended architecture
 
@@ -195,7 +196,7 @@ Codex can run matching hooks concurrently, especially asynchronous hooks. The re
 
 ### Approval resolution
 
-`PermissionRequest` precisely identifies when approval is needed, but hook events may not provide an equally direct “approval resolved” lifecycle event. `PostToolUse` is the likely recovery signal — the concrete candidate is normalizing it to `UserPromptSubmit` (no prompt preview) so the card returns to **Working** — although the card may remain in **Needs you** while an approved command executes. Note this matches Claude behavior today: a Claude card also stays **Needs you** until `Stop`. The app-server protocol can provide more exact behavior later.
+`PermissionRequest` identifies when approval is needed. Both providers now use `PostToolUse` to restore **Working** after tool output, including an answered Claude question. An approved command can still show **Needs you** until it produces output; an exact approval-resolved event would be needed to update at the moment of approval.
 
 ### Session cleanup
 

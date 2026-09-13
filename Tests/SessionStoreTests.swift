@@ -40,6 +40,53 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.orderedSessions[0].lastPromptPreview, "First")
     }
 
+    func test_answeredQuestionRestoresWorkingWithoutNewPrompt() {
+        let clock = FakeClock()
+        let store = SessionStore(clock: clock)
+        store.apply(event(.userPromptSubmit, promptPreview: "Add a download queue"))
+        store.apply(event(.notification))
+        XCTAssertEqual(store.orderedSessions[0].state, .needsYou)
+        clock.advance(by: 180)
+        store.apply(event(.postToolUse))
+        let resumedAt = store.orderedSessions[0].enteredStateAt
+        XCTAssertEqual(resumedAt, clock.now())
+        XCTAssertEqual(store.orderedSessions[0].state, .working)
+        XCTAssertEqual(store.orderedSessions[0].lastPromptPreview, "Add a download queue")
+        clock.advance(by: 30)
+        store.apply(event(.postToolUse))
+        XCTAssertEqual(store.orderedSessions[0].enteredStateAt, resumedAt)
+        store.apply(event(.stop))
+        XCTAssertEqual(store.orderedSessions[0].state, .waiting)
+    }
+
+    func test_compactionPreservesTimerPromptAndBackgroundTasksForBothProviders() {
+        for provider in [AgentProvider.claude, .codex] {
+            for backgroundCount in [0, 2] {
+                let clock = FakeClock()
+                let store = SessionStore(clock: clock)
+                func hook(_ name: HookName, source: String? = nil) -> HookEvent {
+                    HookEvent(hook: name, sessionId: "s", tty: "/dev/ttys001", pid: 100,
+                              cwd: "/project", ts: 0,
+                              promptPreview: name == .userPromptSubmit ? "Keep working" : nil,
+                              toolName: nil, notificationType: nil, message: nil,
+                              backgroundTasksActive: name == .stop ? backgroundCount : nil,
+                              provider: provider, source: source)
+                }
+                store.apply(hook(.userPromptSubmit))
+                if backgroundCount > 0 { store.apply(hook(.stop)) }
+                let before = store.orderedSessions[0]
+                clock.advance(by: 60)
+                store.apply(hook(.sessionStart, source: "compact"))
+                let after = store.orderedSessions[0]
+                XCTAssertEqual(after.state, before.state)
+                XCTAssertEqual(after.enteredStateAt, before.enteredStateAt)
+                XCTAssertEqual(after.lastPromptPreview, before.lastPromptPreview)
+                XCTAssertEqual(after.backgroundTaskCount, backgroundCount)
+                XCTAssertEqual(after.provider, provider)
+            }
+        }
+    }
+
     func test_unknownSessionOnNonStartEventIsSynthesized() {
         let store = SessionStore(clock: FakeClock())
         store.apply(event(.userPromptSubmit, promptPreview: "p"))

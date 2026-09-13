@@ -3,6 +3,71 @@ import XCTest
 @testable import ClaudeMonitor
 
 final class HookScriptTests: XCTestCase {
+    private func runScript(hook: String, stdin: String) async throws -> HookEvent {
+        let scriptURL = try XCTUnwrap(findHookScript())
+        var received: HookEvent?
+        let expect = expectation(description: "event")
+        let server = EventServer { event in received = event; expect.fulfill() }
+        try server.start()
+        defer { server.stop() }
+        let tmpHome = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("claude-monitor-hooktest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: tmpHome.appendingPathComponent(".claude-monitor"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpHome) }
+        try "\(server.port!)\n".write(to: tmpHome.appendingPathComponent(".claude-monitor/port"),
+                                    atomically: true, encoding: .utf8)
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = [scriptURL.path, hook]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = tmpHome.path
+        proc.environment = env
+        let input = Pipe()
+        let output = Pipe()
+        proc.standardInput = input
+        proc.standardOutput = output
+        try proc.run()
+        input.fileHandleForWriting.write(Data(stdin.utf8))
+        try input.fileHandleForWriting.close()
+        proc.waitUntilExit()
+        XCTAssertEqual(proc.terminationStatus, 0)
+        XCTAssertTrue(output.fileHandleForReading.readDataToEndOfFile().isEmpty,
+                      "the monitor must never send hook decisions to Claude")
+        await fulfillment(of: [expect], timeout: 3)
+        return try XCTUnwrap(received)
+    }
+
+    func test_compactionSourceReachesStoreWithoutResettingWorking() async throws {
+        let event = try await runScript(hook: "SessionStart",
+            stdin: #"{"session_id":"s","source":"compact"}"#)
+        XCTAssertEqual(event.source, "compact")
+        let store = SessionStore(clock: FakeClock())
+        store.apply(HookEvent(hook: .userPromptSubmit, sessionId: "s", tty: "", pid: 1,
+                              cwd: "/", ts: 0, promptPreview: "Work", toolName: nil,
+                              notificationType: nil, message: nil))
+        store.apply(event)
+        XCTAssertEqual(store.orderedSessions[0].state, .working)
+        XCTAssertEqual(store.orderedSessions[0].lastPromptPreview, "Work")
+    }
+
+    func test_answeredQuestionToolOutputRestoresWorking() async throws {
+        let event = try await runScript(hook: "PostToolUse",
+            stdin: #"{"session_id":"s","tool_name":"AskUserQuestion","tool_response":{"answers":{"Layout":"Queue screen"}},"prompt":"must not replace the user prompt"}"#)
+        XCTAssertEqual(event.hook, .postToolUse)
+        XCTAssertEqual(event.toolName, "AskUserQuestion")
+        XCTAssertNil(event.promptPreview)
+        XCTAssertEqual(StateMachine.transition(from: .needsYou, for: event.hook), .working)
+    }
+
+    func test_largeToolOutputDoesNotExceedProcessEnvironmentLimit() async throws {
+        let stdin = "{\"session_id\":\"s\",\"tool_name\":\"Read\",\"tool_response\":\""
+            + String(repeating: "x", count: 300_000) + "\"}"
+        let event = try await runScript(hook: "PostToolUse", stdin: stdin)
+        XCTAssertEqual(event.hook, .postToolUse)
+        XCTAssertEqual(event.toolName, "Read")
+    }
+
     func test_hookScriptPostsEnrichedPayload() async throws {
         let scriptURL = try XCTUnwrap(findHookScript(), "could not find hook.sh")
 

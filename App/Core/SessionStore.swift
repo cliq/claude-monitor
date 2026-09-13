@@ -35,7 +35,8 @@ final class SessionStore: ObservableObject {
             let activeBackground = event.backgroundTasksActive ?? 0
             let newState = StateMachine.transition(from: previousState, for: event.hook,
                                                    backgroundTasksActive: activeBackground,
-                                                   notificationMessage: event.message)
+                                                   notificationMessage: event.message,
+                                                   sessionStartSource: event.source)
 
             if newState == .finished {
                 orderedSessions.remove(at: idx)
@@ -64,7 +65,9 @@ final class SessionStore: ObservableObject {
         } else {
             let activeBackground = event.backgroundTasksActive ?? 0
             let newState = StateMachine.transition(from: nil, for: event.hook,
-                                                   backgroundTasksActive: activeBackground)
+                                                   backgroundTasksActive: activeBackground,
+                                                   notificationMessage: event.message,
+                                                   sessionStartSource: event.source)
             if newState == .finished { return }
             var session = Session(
                 id: event.sessionId,

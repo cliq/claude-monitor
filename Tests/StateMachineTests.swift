@@ -6,6 +6,29 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(StateMachine.transition(from: nil, for: .sessionStart), .waiting)
     }
 
+    func test_compactionPreservesEveryExistingState() {
+        for state in SessionState.allCases {
+            XCTAssertEqual(StateMachine.transition(from: state, for: .sessionStart,
+                                                   sessionStartSource: "compact"), state)
+        }
+        XCTAssertEqual(StateMachine.transition(from: nil, for: .sessionStart,
+                                               sessionStartSource: "compact"), .waiting)
+    }
+
+    func test_otherSessionStartsStillResetToWaiting() {
+        for source: String? in [nil, "startup", "resume", "clear"] {
+            XCTAssertEqual(StateMachine.transition(from: .working, for: .sessionStart,
+                                                   sessionStartSource: source), .waiting)
+        }
+    }
+
+    func test_toolOutputRestoresWorkingAfterQuestionOrApproval() {
+        for state: SessionState? in [nil, .waiting, .needsYou, .working, .backgroundWorking] {
+            XCTAssertEqual(StateMachine.transition(from: state, for: .postToolUse), .working)
+        }
+        XCTAssertEqual(StateMachine.transition(from: .finished, for: .postToolUse), .finished)
+    }
+
     func test_userPromptSubmitGoesToWorking() {
         XCTAssertEqual(StateMachine.transition(from: .waiting, for: .userPromptSubmit), .working)
         XCTAssertEqual(StateMachine.transition(from: .needsYou, for: .userPromptSubmit), .working)

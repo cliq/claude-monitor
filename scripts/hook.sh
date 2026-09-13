@@ -1,6 +1,6 @@
 #!/bin/bash
 # claude-monitor hook — installed to ~/.claude-monitor/hook.sh
-# Invoked by Claude Code for SessionStart, UserPromptSubmit, Stop, Notification, SessionEnd.
+# Invoked for SessionStart, UserPromptSubmit, PostToolUse, Stop, Notification, SessionEnd.
 # Reads hook JSON on stdin, enriches, POSTs to the local Claude Monitor server.
 # Always exits 0 so hook failures can never affect the Claude session.
 
@@ -31,14 +31,15 @@ esac
 PID_VAL="$PPID"   # the claude process that invoked us
 CWD_VAL="$(pwd)"
 TS_VAL="$(date +%s)"
-export HOOK_NAME STDIN_JSON TTY_VAL PID_VAL CWD_VAL TS_VAL
+export HOOK_NAME TTY_VAL PID_VAL CWD_VAL TS_VAL
 
 # Build JSON — use python for safe escaping if available, otherwise a minimal fallback.
 if command -v python3 >/dev/null 2>&1; then
-  PAYLOAD="$(PYTHONIOENCODING=utf-8 python3 - <<PY
+  # Tool results can exceed the OS environment-size limit. Pipe the JSON instead.
+  PAYLOAD="$(printf '%s' "$STDIN_JSON" | PYTHONIOENCODING=utf-8 python3 -c '
 import json, os, sys
 try:
-    src = json.loads(os.environ.get("STDIN_JSON") or "{}")
+    src = json.load(sys.stdin)
 except Exception:
     src = {}
 out = {
@@ -49,8 +50,11 @@ out = {
     "cwd":             os.environ.get("CWD_VAL", ""),
     "ts":              int(os.environ.get("TS_VAL", "0")),
 }
+source = src.get("source")
+if out["hook"] == "SessionStart" and isinstance(source, str):
+    out["source"] = source
 preview = src.get("prompt") or src.get("user_prompt")
-if isinstance(preview, str) and not preview.lstrip().startswith("<task-notification>"):
+if out["hook"] == "UserPromptSubmit" and isinstance(preview, str) and not preview.lstrip().startswith("<task-notification>"):
     out["prompt_preview"] = preview[:120]
 tool = src.get("tool_name")
 if isinstance(tool, str):
@@ -76,13 +80,15 @@ if isinstance(bg, list):
         and str(t.get("type", "")).lower() not in passive_types
     )
 print(json.dumps(out))
-PY
+'
 )"
 else
   # Minimal fallback: no prompt_preview, best-effort.
   SID="$(echo "$STDIN_JSON" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  SOURCE="$(printf '%s' "$STDIN_JSON" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  case "$SOURCE" in startup|resume|clear|compact) ;; *) SOURCE="" ;; esac
   PAYLOAD=$(cat <<EOF
-{"hook":"$HOOK_NAME","session_id":"$SID","tty":"$TTY_VAL","pid":$PID_VAL,"cwd":"$CWD_VAL","ts":$TS_VAL}
+{"hook":"$HOOK_NAME","session_id":"$SID","tty":"$TTY_VAL","pid":$PID_VAL,"cwd":"$CWD_VAL","ts":$TS_VAL,"source":"$SOURCE"}
 EOF
 )
 fi

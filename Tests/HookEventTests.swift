@@ -34,6 +34,14 @@ final class HookEventTests: XCTestCase {
         let event = try JSONDecoder().decode(HookEvent.self, from: json)
         XCTAssertEqual(event.hook, .sessionStart)
         XCTAssertNil(event.promptPreview)
+        XCTAssertNil(event.source, "older deployed hooks must remain compatible")
+    }
+
+    func test_roundTripsSessionStartSource() throws {
+        let json = #"{"hook":"SessionStart","session_id":"x","tty":"","pid":1,"cwd":"/","ts":1,"source":"compact"}"#.data(using: .utf8)!
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertEqual(event.source, "compact")
+        XCTAssertEqual(try JSONDecoder().decode(HookEvent.self, from: JSONEncoder().encode(event)), event)
     }
 
     func test_rejectsUnknownHookName() {

@@ -47,7 +47,7 @@ final class CodexHookInstallerTests: XCTestCase {
         try HookInstaller.installCodexHook(configDir: dir)
         let json = try loadHooksJson()
 
-        for event in ["SessionStart", "UserPromptSubmit", "Stop", "PermissionRequest", "SessionEnd"] {
+        for event in ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "PermissionRequest", "SessionEnd"] {
             let managed = managedEntries(in: json, event: event)
             XCTAssertEqual(managed.count, 1, "expected one managed entry for \(event)")
             let inner = try XCTUnwrap((managed[0]["hooks"] as? [[String: Any]])?.first)
@@ -69,6 +69,24 @@ final class CodexHookInstallerTests: XCTestCase {
         XCTAssertNil(entry["matcher"])
         XCTAssertNil(entry["_managedBy"])
         XCTAssertNil(entry["_version"])
+    }
+
+    func test_upgradeFromV1InstallsToolProgressHookThroughMaintenance() throws {
+        // The previous schema had no PostToolUse entry and encoded version 1.
+        let oldEvents = ["SessionStart", "UserPromptSubmit", "Stop", "PermissionRequest", "SessionEnd"]
+        let hooks = Dictionary(uniqueKeysWithValues: oldEvents.map { event in
+            (event, [["hooks": [["type": "command", "command":
+                "$HOME/.claude-monitor/codex-hook.sh \(event) --managed-by=claude-monitor --version=1"]]]])
+        })
+        try JSONSerialization.data(withJSONObject: ["hooks": hooks]).write(to: hooksURL)
+        XCTAssertEqual(try HookInstaller.inspectCodexHook(configDir: dir).status, .outdated)
+        let refreshed = HookMaintenance.reinstallOutdated(
+            managedDirs: [dir],
+            inspect: { try HookInstaller.inspectCodexHook(configDir: $0).status },
+            install: { try HookInstaller.installCodexHook(configDir: $0) })
+        XCTAssertEqual(refreshed, [dir])
+        XCTAssertEqual(try HookInstaller.inspectCodexHook(configDir: dir).status, .installed)
+        XCTAssertEqual(managedEntries(in: try loadHooksJson(), event: "PostToolUse").count, 1)
     }
 
     func test_installPinsSessionEndTimeoutInsideCodexBudget() throws {

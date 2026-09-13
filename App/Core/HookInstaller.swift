@@ -9,10 +9,11 @@ enum HookInstaller {
     /// re-serialize entries to the published schema and strip unknown keys, which left real
     /// installs looking "Not installed" even though the hooks were firing. The `command`
     /// field is schema-defined and survives those rewrites, so the version is encoded there.
-    static let currentVersion = 3
+    // v4 adds PostToolUse so answered prompts recover to Working.
+    static let currentVersion = 4
 
     /// Codex-hook schema version, independent of the Claude `currentVersion` lineage.
-    static let codexCurrentVersion = 1
+    static let codexCurrentVersion = 2
 
     private struct Kind {
         let managedValue: String
@@ -43,7 +44,7 @@ enum HookInstaller {
         managedValue: "claude-monitor",
         scriptPathMarker: ".claude-monitor/hook.sh",
         scriptRelativePath: ".claude-monitor/hook.sh",
-        hooks: ["SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd"],
+        hooks: ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Notification", "SessionEnd"],
         currentVersion: HookInstaller.currentVersion
     )
 
@@ -59,7 +60,7 @@ enum HookInstaller {
         managedValue: "claude-monitor",
         scriptPathMarker: ".claude-monitor/codex-hook.sh",
         scriptRelativePath: ".claude-monitor/codex-hook.sh",
-        hooks: ["SessionStart", "UserPromptSubmit", "Stop", "PermissionRequest", "SessionEnd"],
+        hooks: ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "PermissionRequest", "SessionEnd"],
         currentVersion: HookInstaller.codexCurrentVersion,
         settingsFileName: "hooks.json",
         backupSuffix: "claude-monitor.bak",
@@ -149,12 +150,14 @@ enum HookInstaller {
         if anyMissing && versions.isEmpty {
             return Status(status: .notInstalled, installedVersion: 0)
         }
-        if anyMissing || anyModified {
-            return Status(status: .modifiedExternally, installedVersion: versions.max() ?? 0)
-        }
         let maxV = versions.max() ?? 0
+        // Older schemas legitimately lack newly added events. Let maintenance
+        // migrate them before treating missing current-version entries as edits.
         if maxV < kind.currentVersion {
             return Status(status: .outdated, installedVersion: maxV)
+        }
+        if anyMissing || anyModified {
+            return Status(status: .modifiedExternally, installedVersion: maxV)
         }
         return Status(status: .installed, installedVersion: maxV)
     }

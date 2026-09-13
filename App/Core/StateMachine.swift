@@ -10,9 +10,10 @@ enum StateMachine {
     static func transition(from current: SessionState?,
                            for hook: HookName,
                            backgroundTasksActive: Int = 0,
-                           notificationMessage: String? = nil) -> SessionState {
+                           notificationMessage: String? = nil,
+                           sessionStartSource: String? = nil) -> SessionState {
         let base = current ?? applyFromNil()
-        return apply(base, hook, backgroundTasksActive, notificationMessage)
+        return apply(base, hook, backgroundTasksActive, notificationMessage, sessionStartSource)
     }
 
     private static func applyFromNil() -> SessionState {
@@ -22,11 +23,18 @@ enum StateMachine {
     private static func apply(_ state: SessionState,
                               _ hook: HookName,
                               _ backgroundTasksActive: Int,
-                              _ notificationMessage: String?) -> SessionState {
+                              _ notificationMessage: String?,
+                              _ sessionStartSource: String?) -> SessionState {
         if state == .finished { return .finished }
         switch hook {
-        case .sessionStart:     return .waiting
-        case .userPromptSubmit: return .working
+        case .sessionStart:
+            // Both CLIs fire SessionStart after compaction, including mid-turn.
+            // Preserve idle states too: manually compacting is not new work.
+            return sessionStartSource == "compact" ? state : .waiting
+        case .userPromptSubmit, .postToolUse:
+            // Answering a question or approving a tool resumes the same turn,
+            // so no UserPromptSubmit is emitted. Tool output confirms progress.
+            return .working
         case .stop:             return backgroundTasksActive > 0 ? .backgroundWorking : .waiting
         case .notification:     return notificationState(from: state, message: notificationMessage)
         case .sessionEnd:       return .finished
