@@ -11,6 +11,8 @@ struct Session: Identifiable, Equatable {
     var enteredStateAt: Date        // when the current state was entered (drives elapsed time)
     var lastPromptPreview: String?  // sticks between UserPromptSubmit events
     var backgroundTaskCount: Int = 0  // active background tasks while .backgroundWorking
+    var backgroundTaskIDs: Set<String> = []
+    var transcriptPath: String?
 
     /// Human-readable project name = last path component of cwd.
     var projectName: String {

@@ -96,5 +96,7 @@ final class HookEventTests: XCTestCase {
         """.data(using: .utf8)!
         let event = try JSONDecoder().decode(HookEvent.self, from: json)
         XCTAssertNil(event.backgroundTasksActive)
+        XCTAssertNil(event.backgroundTaskIDs)
+        XCTAssertNil(event.transcriptPath)
     }
 }

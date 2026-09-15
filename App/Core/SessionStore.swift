@@ -51,6 +51,7 @@ final class SessionStore: ObservableObject {
             session.tty = event.tty
             session.pid = event.pid
             session.cwd = event.cwd
+            if let path = event.transcriptPath { session.transcriptPath = path }
             if let preview = event.promptPreview {
                 session.lastPromptPreview = preview
             }
@@ -58,8 +59,10 @@ final class SessionStore: ObservableObject {
             // Notification that keeps `.backgroundWorking`) must not zero the count.
             if newState != .backgroundWorking {
                 session.backgroundTaskCount = 0
+                session.backgroundTaskIDs = []
             } else if let reported = event.backgroundTasksActive {
                 session.backgroundTaskCount = reported
+                session.backgroundTaskIDs = Set(event.backgroundTaskIDs ?? [])
             }
             orderedSessions[idx] = session
         } else {
@@ -80,8 +83,31 @@ final class SessionStore: ObservableObject {
                 lastPromptPreview: event.promptPreview
             )
             session.backgroundTaskCount = (newState == .backgroundWorking) ? activeBackground : 0
+            session.backgroundTaskIDs = (newState == .backgroundWorking)
+                ? Set(event.backgroundTaskIDs ?? []) : []
+            session.transcriptPath = event.transcriptPath
             orderedSessions.append(session)
         }
+    }
+
+    /// Task cancellation can append a transcript notification without firing another hook.
+    /// Only reconcile the currently tracked tasks while the main turn is stopped; a read
+    /// that finishes after a new prompt or permission request must not overwrite that state.
+    func completeBackgroundTasks(sessionId: String, transcriptPath: String, taskIDs: Set<String>) {
+        guard let session = orderedSessions.first(where: { $0.id == sessionId }),
+              session.provider == .claude, session.state == .backgroundWorking,
+              session.transcriptPath == transcriptPath else { return }
+        let completed = session.backgroundTaskIDs.intersection(taskIDs)
+        guard !completed.isEmpty else { return }
+        let remaining = session.backgroundTaskIDs.subtracting(completed)
+        // An older/unrecognized task may have a count but no identity. Never infer
+        // that it ended just because all the identifiable tasks have ended.
+        let count = max(remaining.count, session.backgroundTaskCount - completed.count)
+        apply(HookEvent(hook: .stop, sessionId: session.id, tty: session.tty,
+                        pid: session.pid, cwd: session.cwd, ts: Int(clock.now().timeIntervalSince1970),
+                        promptPreview: nil, toolName: nil, notificationType: nil, message: nil,
+                        backgroundTasksActive: count, provider: session.provider,
+                        transcriptPath: transcriptPath, backgroundTaskIDs: Array(remaining).sorted()))
     }
 
     /// Remove a session immediately (used by the terminal focus stale-tab path

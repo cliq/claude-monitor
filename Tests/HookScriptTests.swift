@@ -68,6 +68,17 @@ final class HookScriptTests: XCTestCase {
         XCTAssertEqual(event.toolName, "Read")
     }
 
+    func test_backgroundTaskIdentitiesAndTranscriptReachStore() async throws {
+        let event = try await runScript(hook: "Stop", stdin: #"{"session_id":"s","transcript_path":"/tmp/session.jsonl","background_tasks":[{"id":"shell-1","type":"shell","status":"running"},{"id":"agent-1","type":"subagent","status":"running"},{"id":"passive","type":"monitor","status":"running"},{"id":"cancelled","type":"shell","status":"canceled"},{"type":"workflow","status":"running"}]}"#)
+        XCTAssertEqual(event.backgroundTasksActive, 3)
+        XCTAssertEqual(event.backgroundTaskIDs, ["shell-1", "agent-1"])
+        XCTAssertEqual(event.transcriptPath, "/tmp/session.jsonl")
+        let store = SessionStore(clock: FakeClock())
+        store.apply(event)
+        XCTAssertEqual(store.orderedSessions[0].backgroundTaskIDs, ["shell-1", "agent-1"])
+        XCTAssertEqual(store.orderedSessions[0].transcriptPath, "/tmp/session.jsonl")
+    }
+
     func test_hookScriptPostsEnrichedPayload() async throws {
         let scriptURL = try XCTUnwrap(findHookScript(), "could not find hook.sh")
 

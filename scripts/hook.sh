@@ -53,6 +53,9 @@ out = {
 source = src.get("source")
 if out["hook"] == "SessionStart" and isinstance(source, str):
     out["source"] = source
+transcript = src.get("transcript_path")
+if isinstance(transcript, str):
+    out["transcript_path"] = transcript
 preview = src.get("prompt") or src.get("user_prompt")
 if out["hook"] == "UserPromptSubmit" and isinstance(preview, str) and not preview.lstrip().startswith("<task-notification>"):
     out["prompt_preview"] = preview[:120]
@@ -70,15 +73,21 @@ if isinstance(bg, list):
     # Only count work that will eventually wake the session (subagents, shell jobs,
     # workflows, cloud sessions...). Monitors -- artifact live-update watches and the
     # Monitor tool -- are open-ended and may never fire; counting them parks the tile
-    # in "Working" forever because no hook fires when a background task ends.
-    terminal = {"completed", "failed", "cancelled", "killed", "stopped"}
+    # in "Working" forever because they may never publish a completion.
+    terminal = {"completed", "failed", "cancelled", "canceled", "killed", "stopped"}
     passive_types = {"monitor", "monitor_ws", "monitor_mcp"}
-    out["background_tasks_active"] = sum(
-        1 for t in bg
+    active = [
+        t for t in bg
         if isinstance(t, dict)
         and str(t.get("status", "")).lower() not in terminal
         and str(t.get("type", "")).lower() not in passive_types
-    )
+    ]
+    out["background_tasks_active"] = len(active)
+    # Keep identities so the app can reconcile cancellations recorded in the
+    # transcript even when Claude does not emit another Stop hook.
+    out["background_task_ids"] = list(dict.fromkeys(
+        t["id"] for t in active if isinstance(t.get("id"), str) and t["id"]
+    ))
 print(json.dumps(out))
 '
 )"

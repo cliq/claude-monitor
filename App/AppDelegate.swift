@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pushNotifier: PushNotifier!
     private var server: EventServer!
     private var sweeper: StaleSessionSweeper!
+    private var backgroundTaskReconciler: BackgroundTaskReconciler!
     private var dashboard: DashboardWindow!
     private var menuBar: MenuBarController!
     private lazy var bridge: TerminalBridgeProtocol = CompositeTerminalBridge(
@@ -145,6 +146,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. 60s stale sweep.
         sweeper = StaleSessionSweeper(store: store)
         sweeper.start()
+        backgroundTaskReconciler = BackgroundTaskReconciler(store: store)
+        backgroundTaskReconciler.start()
 
         // 4. Dashboard window.
         let content = DashboardView(store: store,

@@ -24,9 +24,10 @@ Clicking a tile brings its Terminal.app, iTerm2, or [Orca](https://onorca.dev) t
 
 ## How it works
 
-1. The app writes a hook script to `~/.claude-monitor/hook.sh` and registers it for five Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`) in the selected `settings.json` files.
+1. The app writes a hook script to `~/.claude-monitor/hook.sh` and registers it for six Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `Notification`, `SessionEnd`) in the selected `settings.json` files.
 2. When Claude Code fires a hook, the script POSTs an enriched event (session id, tty, pid, cwd) to a local HTTP server the app is running on `127.0.0.1`.
 3. The app maps each event through a state machine and updates the tile.
+   While a Claude session has background tasks, the app also checks its local transcript every five seconds for task completion or cancellation records. This clears stale task counts even when cancelling a task does not fire another hook.
 4. Clicking a tile asks each enabled terminal provider to focus the hosting tab; the first match wins. Terminal.app and iTerm2 are driven over AppleScript by `tty`; Orca is driven through its bundled CLI using the terminal handle found in the session's environment.
 
 Hook failures always exit 0 — if the app is not running, Claude is unaffected.
