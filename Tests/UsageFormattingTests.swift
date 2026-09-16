@@ -37,6 +37,27 @@ final class UsageFormattingTests: XCTestCase {
                       "expected 'E HH:mm' format, got '\(out)'")
     }
 
+    func test_formatReset_weekOrMoreOut_showsDate() {
+        let now = fixedDate(hour: 9, minute: 0)
+        let reset = fixedDate(hour: 2, minute: 0, dayOffset: 15)
+        let out = UsageFormat.formatReset(iso(reset), now: now)
+        XCTAssertTrue(out.range(of: #"^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}$"#, options: .regularExpression) != nil,
+                      "expected 'MMM d HH:mm' format, got '\(out)'")
+        // Just under six days out still reads as a weekday.
+        let soon = fixedDate(hour: 8, minute: 0, dayOffset: 5)
+        XCTAssertTrue(UsageFormat.formatReset(iso(soon), now: now)
+                        .range(of: #"^[A-Z][a-z]{2} \d{2}:\d{2}$"#, options: .regularExpression) != nil)
+    }
+
+    func test_isWithinDays() {
+        let now = fixedDate(hour: 9, minute: 0)
+        XCTAssertTrue(UsageFormat.isWithin(days: 7, iso(fixedDate(hour: 9, minute: 0, dayOffset: 6)), now: now))
+        XCTAssertFalse(UsageFormat.isWithin(days: 7, iso(fixedDate(hour: 9, minute: 0, dayOffset: 8)), now: now))
+        XCTAssertTrue(UsageFormat.isWithin(days: 7, iso(fixedDate(hour: 9, minute: 0, dayOffset: -1)), now: now))
+        XCTAssertFalse(UsageFormat.isWithin(days: 7, nil, now: now))
+        XCTAssertFalse(UsageFormat.isWithin(days: 7, "garbage", now: now))
+    }
+
     func test_formatReset_pastSameDay_returnsEmDash() {
         let now = fixedDate(hour: 12, minute: 30)
         let reset = fixedDate(hour: 9, minute: 0)

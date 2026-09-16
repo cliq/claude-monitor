@@ -209,7 +209,7 @@ final class CodexUsageTests: XCTestCase {
 
     // MARK: - Mapping: individual (spend-control) limit
 
-    func test_summarize_individualLimit_monthlyWhenResetOnMonthBoundary() throws {
+    func test_summarize_individualLimit_isLabelledSpend() throws {
         let reset = unixSeconds("2026-09-01T00:00:00Z")
         let result = try decodeResult("""
         {"rateLimits":{"limitId":"codex","planType":"team",
@@ -219,35 +219,28 @@ final class CodexUsageTests: XCTestCase {
 
         let out = CodexUsageMapper.summarize(result, name: "codex")
         let individual = out.metrics.first { $0.id == "individual" }
-        XCTAssertEqual(individual?.label, "MONTHLY")
+        XCTAssertEqual(individual?.label, "SPEND")
         XCTAssertEqual(individual?.usedPct, 6) // 100 - 94
-        XCTAssertEqual(individual?.detail, "125 / 2000")
+        XCTAssertEqual(individual?.detail, "125 / 2000 credits")
         XCTAssertEqual(individual?.resetsAt, "2026-09-01T00:00:00Z")
         // Legacy adapter: monthly rides in the model slot.
         XCTAssertEqual(out.modelPct, 6)
-        XCTAssertEqual(out.modelLabel, "MONTHLY")
+        XCTAssertEqual(out.modelLabel, "SPEND")
         // Priority: weekly before individual.
-        XCTAssertEqual(out.metrics.map(\.label), ["WEEKLY", "MONTHLY"])
+        XCTAssertEqual(out.metrics.map(\.label), ["WEEKLY", "SPEND"])
     }
 
-    func test_summarize_individualLimit_fallsBackToIndividualLabelOffBoundary() throws {
-        let reset = unixSeconds("2026-09-15T10:30:00Z")
-        let result = try decodeResult("""
-        {"rateLimits":{"limitId":"codex",
-          "individualLimit":{"limit":"2000","used":"125","remainingPercent":94,"resetsAt":\(reset)}}}
-        """)
-        XCTAssertEqual(CodexUsageMapper.summarize(result, name: "codex").modelLabel, "INDIVIDUAL")
-    }
-
-    func test_summarize_individualLimit_cleansFractionlessAmounts() throws {
+    func test_summarize_individualLimit_roundsAmountsToWholeCredits() throws {
         let result = try decodeResult("""
         {"rateLimits":{"limitId":"codex",
           "individualLimit":{"limit":"2000","used":"0.0","remainingPercent":100}}}
         """)
         let out = CodexUsageMapper.summarize(result, name: "codex")
-        XCTAssertEqual(out.metrics.first { $0.id == "individual" }?.detail, "0 / 2000")
+        XCTAssertEqual(out.metrics.first { $0.id == "individual" }?.detail, "0 / 2000 credits")
 
-        XCTAssertEqual(CodexUsageMapper.cleanAmount("125.5"), "125.5") // real fraction kept
+        XCTAssertEqual(CodexUsageMapper.cleanAmount("125.5"), "126") // whole credits only
+        XCTAssertEqual(CodexUsageMapper.cleanAmount("1426.6314442157745"), "1427")
+        XCTAssertEqual(CodexUsageMapper.cleanAmount("2.999"), "3")
         XCTAssertEqual(CodexUsageMapper.cleanAmount("n/a"), "n/a")     // non-numeric untouched
     }
 
@@ -261,15 +254,102 @@ final class CodexUsageTests: XCTestCase {
 
     // MARK: - Mapping: exhausted / error states
 
-    func test_summarize_spendControlReachedSurfacesErrorWithoutDroppingMetrics() throws {
+    func test_summarize_spendCapReachedKeepsStatusOkWhileUsageAllowed() throws {
+        // Real Business Premium shape: zero extra-spend cap, plan window barely used.
         let result = try decodeResult("""
-        {"rateLimits":{"limitId":"codex","spendControlReached":true,
+        {"ordinaryUsageAllowed":true,
+         "rateLimits":{"limitId":"codex","spendControlReached":true,"planType":"self_serve_business_prolite",
+          "primary":{"usedPercent":3,"windowDurationMins":10080,"resetsAt":1788164537},
+          "individualLimit":{"limit":"0","used":"1426.6314442157745","remainingPercent":0,"resetsAt":1790812801}}}
+        """)
+        let out = CodexUsageMapper.summarize(result, name: "codex")
+        XCTAssertEqual(out.status, "ok")
+        XCTAssertNil(out.error)
+        XCTAssertNil(out.note) // the 100% SPEND bar already says it
+        XCTAssertEqual(out.weeklyPct, 3)
+        XCTAssertEqual(out.metrics.map(\.label), ["WEEKLY", "SPEND"])
+        XCTAssertEqual(out.metrics.last?.usedPct, 100)
+        XCTAssertEqual(out.metrics.last?.detail, "1427 / 0 credits")
+    }
+
+    func test_summarize_spendCapReachedIsAnErrorWhenUsageBlocked() throws {
+        let result = try decodeResult("""
+        {"ordinaryUsageAllowed":false,
+         "rateLimits":{"limitId":"codex","spendControlReached":true,
           "primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1788164537}}}
         """)
         let out = CodexUsageMapper.summarize(result, name: "codex")
         XCTAssertEqual(out.status, "error")
         XCTAssertEqual(out.error, "spend limit reached")
+        XCTAssertNil(out.note)
         XCTAssertEqual(out.weeklyPct, 100) // percentages kept
+    }
+
+    func test_summarize_usageBlockedWithoutSpendCapIsGenericError() throws {
+        let result = try decodeResult("""
+        {"ordinaryUsageAllowed":false,"rateLimits":{"limitId":"codex"}}
+        """)
+        let out = CodexUsageMapper.summarize(result, name: "codex")
+        XCTAssertEqual(out.status, "error")
+        XCTAssertEqual(out.error, "usage blocked")
+    }
+
+    // MARK: - Mapping: reset credits and purchased credits
+
+    func test_summarize_countsAvailableResetCreditsOnly() throws {
+        let result = try decodeResult("""
+        {"rateLimits":{"limitId":"codex"},
+         "rateLimitResetCredits":{"availableCount":1,"credits":[
+           {"id":"a","resetType":"codexRateLimits","status":"available","title":"Full reset","expiresAt":1791154924},
+           {"id":"b","resetType":"codexRateLimits","status":"redeemed","title":"Full reset"}]}}
+        """)
+        let out = CodexUsageMapper.summarize(result, name: "codex")
+        XCTAssertEqual(out.resetCredits, 1)
+        XCTAssertEqual(out.resetCreditsExpireAt, "2026-10-04T23:02:04Z") // earliest available grant
+    }
+
+    func test_summarize_resetCreditsExpiryIsEarliestAvailableGrant() throws {
+        let result = try decodeResult("""
+        {"rateLimits":{"limitId":"codex"},
+         "rateLimitResetCredits":{"availableCount":2,"credits":[
+           {"id":"a","status":"available","expiresAt":1791154924},
+           {"id":"b","status":"available","expiresAt":1790000000},
+           {"id":"c","status":"redeemed","expiresAt":1780000000}]}}
+        """)
+        let out = CodexUsageMapper.summarize(result, name: "codex")
+        XCTAssertEqual(out.resetCredits, 2)
+        XCTAssertEqual(out.resetCreditsExpireAt, CodexUsageMapper.isoString(unixSeconds: 1790000000))
+    }
+
+    func test_summarize_resetCreditsFallBackToServerCountAndAbsentIsNil() throws {
+        let counted = try decodeResult(#"{"rateLimits":{"limitId":"codex"},"rateLimitResetCredits":{"availableCount":2}}"#)
+        XCTAssertEqual(CodexUsageMapper.summarize(counted, name: "codex").resetCredits, 2)
+        XCTAssertNil(CodexUsageMapper.summarize(counted, name: "codex").resetCreditsExpireAt)
+        let absent = try decodeResult(#"{"rateLimits":{"limitId":"codex"}}"#)
+        XCTAssertNil(CodexUsageMapper.summarize(absent, name: "codex").resetCredits)
+    }
+
+    func test_summarize_creditBalanceOnlyNotedWhenPositive() throws {
+        let zero = try decodeResult("""
+        {"rateLimits":{"limitId":"codex","credits":{"hasCredits":false,"unlimited":false,"balance":"0"}}}
+        """)
+        XCTAssertNil(CodexUsageMapper.summarize(zero, name: "codex").note)
+
+        let nullBalance = try decodeResult("""
+        {"rateLimits":{"limitId":"codex","credits":{"hasCredits":true,"unlimited":false,"balance":null}}}
+        """)
+        XCTAssertNil(CodexUsageMapper.summarize(nullBalance, name: "codex").note)
+
+        let positive = try decodeResult("""
+        {"rateLimits":{"limitId":"codex","spendControlReached":true,
+          "credits":{"hasCredits":true,"unlimited":false,"balance":"12.50"}}}
+        """)
+        XCTAssertEqual(CodexUsageMapper.summarize(positive, name: "codex").note, "13 credits")
+
+        let unlimited = try decodeResult("""
+        {"rateLimits":{"limitId":"codex","credits":{"unlimited":true}}}
+        """)
+        XCTAssertEqual(CodexUsageMapper.summarize(unlimited, name: "codex").note, "unlimited credits")
     }
 
     func test_summarize_rateLimitReachedSurfacesError() throws {

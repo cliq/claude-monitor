@@ -57,7 +57,30 @@ enum UsageFormat {
         if d < now { return "—" }
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = Calendar.current.isDate(d, inSameDayAs: now) ? "HH:mm" : "E HH:mm"
+        if Calendar.current.isDate(d, inSameDayAs: now) {
+            fmt.dateFormat = "HH:mm"
+        } else if d.timeIntervalSince(now) < 6 * 86_400 {
+            fmt.dateFormat = "E HH:mm"
+        } else {
+            // A weekday alone is ambiguous a week or more out (monthly spend
+            // windows, reset-credit expiries) — show the date.
+            fmt.dateFormat = "MMM d HH:mm"
+        }
         return fmt.string(from: d)
+    }
+
+    /// True when `iso` parses and lands within `days` of `now` (past dates
+    /// count as expiring too). Used to colour soon-expiring reset credits.
+    nonisolated static func isWithin(days: Int, _ iso: String?, now: Date = Date()) -> Bool {
+        guard let iso else { return false }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = parser.date(from: iso)
+        if date == nil {
+            parser.formatOptions = [.withInternetDateTime]
+            date = parser.date(from: iso)
+        }
+        guard let date else { return false }
+        return date.timeIntervalSince(now) < Double(days) * 86_400
     }
 }

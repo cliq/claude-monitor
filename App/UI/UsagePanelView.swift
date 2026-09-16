@@ -74,6 +74,30 @@ private struct UsageAccountRow: View {
         }
     }
 
+    /// Muted account-level facts that are not errors: the provider's note
+    /// (credit balance) and unredeemed Codex reset grants. A grant that
+    /// lapses within a week is called out in red.
+    private struct InfoLine {
+        var text: String
+        var warning: Bool
+    }
+
+    private var infoLine: InfoLine? {
+        var parts: [String] = []
+        var warning = false
+        if let note = account.note, !note.isEmpty { parts.append(note) }
+        if let resets = account.resetCredits, resets > 0 {
+            let noun = resets == 1 ? "1 reset" : "\(resets) resets"
+            if UsageFormat.isWithin(days: 7, account.resetCreditsExpireAt) {
+                warning = true
+                parts.append("\(noun) expires \(UsageFormat.formatReset(account.resetCreditsExpireAt))")
+            } else {
+                parts.append("\(noun) available")
+            }
+        }
+        return parts.isEmpty ? nil : InfoLine(text: parts.joined(separator: " · "), warning: warning)
+    }
+
     var body: some View {
         Group {
             if compact { compactBody } else { regularBody }
@@ -97,6 +121,12 @@ private struct UsageAccountRow: View {
                     Text(account.error ?? "error")
                         .font(.system(size: 9))
                         .foregroundStyle(UsagePalette.crit)
+                        .lineLimit(1)
+                }
+                if let info = infoLine {
+                    Text(info.text)
+                        .font(.system(size: 10))
+                        .foregroundStyle(info.warning ? UsagePalette.crit : UsagePalette.muted)
                         .lineLimit(1)
                 }
             }
@@ -124,6 +154,13 @@ private struct UsageAccountRow: View {
                     .foregroundStyle(UsagePalette.muted)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                if let info = infoLine {
+                    Text(info.text)
+                        .font(.system(size: 9))
+                        .foregroundStyle(info.warning ? UsagePalette.crit : UsagePalette.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(width: 96, alignment: .leading)
             if account.status == "error" {
@@ -180,11 +217,21 @@ private struct UsageMetricCellView: View {
         pct < 0 ? UsagePalette.idle : pct >= 85 ? UsagePalette.crit : pct >= 60 ? UsagePalette.warn : UsagePalette.text
     }
 
-    private var footer: String {
-        if pct < 0 { return "idle" }
-        return [metric.resets, metric.detail ?? ""]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+    /// Reset time on one line, the optional detail ("1427 / 0 credits") on a
+    /// second — joined on one line the pair truncates in every layout.
+    private var footerLines: [String] {
+        if pct < 0 { return ["idle"] }
+        return [metric.resets, metric.detail ?? ""].filter { !$0.isEmpty }
+    }
+
+    @ViewBuilder
+    private func footer(size: CGFloat) -> some View {
+        ForEach(footerLines, id: \.self) { line in
+            Text(line)
+                .font(.system(size: size))
+                .foregroundStyle(pct < 0 ? UsagePalette.idle : UsagePalette.reset)
+                .lineLimit(1)
+        }
     }
 
     var body: some View {
@@ -213,10 +260,7 @@ private struct UsageMetricCellView: View {
                 }
             }
             bar(height: 5)
-            Text(footer)
-                .font(.system(size: 11))
-                .foregroundStyle(pct < 0 ? UsagePalette.idle : UsagePalette.reset)
-                .lineLimit(1)
+            footer(size: 11)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -245,10 +289,7 @@ private struct UsageMetricCellView: View {
                 }
             }
             bar(height: 3)
-            Text(footer)
-                .font(.system(size: 9))
-                .foregroundStyle(pct < 0 ? UsagePalette.idle : UsagePalette.reset)
-                .lineLimit(1)
+            footer(size: 9)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

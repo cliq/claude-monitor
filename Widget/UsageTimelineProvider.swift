@@ -39,11 +39,11 @@ extension UsageSnapshot {
             weeklyResets: "Thu 08:00",
             modelPct: 6,
             modelResets: "Mon 00:00",
-            modelLabel: "MONTHLY",
+            modelLabel: "SPEND",
             metrics: [
                 UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 25, resets: "Thu 08:00"),
-                UsageMetric(id: "individual", label: "MONTHLY", usedPct: 6,
-                            resets: "Mon 00:00", detail: "125 / 2000"),
+                UsageMetric(id: "individual", label: "SPEND", usedPct: 6,
+                            resets: "Mon 00:00", detail: "125 / 2000 credits"),
             ]
         )
         let formatter = ISO8601DateFormatter()

@@ -134,6 +134,26 @@ final class UsageModelsTests: XCTestCase {
         XCTAssertEqual(first["model_label"] as? String, "FABLE")
     }
 
+    func test_noteAndResetCreditsRoundTripAndDecodeAsAbsent() throws {
+        var account = AccountUsage(provider: .codex, name: "cliq", status: "ok")
+        account.note = "13 credits"
+        account.resetCredits = 1
+        account.resetCreditsExpireAt = "2026-10-04T23:02:04Z"
+        let data = try JSONEncoder().encode(account)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["note"] as? String, "13 credits")
+        XCTAssertEqual(json["reset_credits"] as? Int, 1)
+        XCTAssertEqual(json["reset_credits_expire_at"] as? String, "2026-10-04T23:02:04Z")
+        XCTAssertEqual(try JSONDecoder().decode(AccountUsage.self, from: data), account)
+
+        // Snapshots written before these keys existed keep decoding.
+        let legacy = try JSONDecoder().decode(AccountUsage.self,
+                                              from: Data(#"{"name":"cliq","status":"ok"}"#.utf8))
+        XCTAssertNil(legacy.note)
+        XCTAssertNil(legacy.resetCredits)
+        XCTAssertNil(legacy.resetCreditsExpireAt)
+    }
+
     // MARK: - Legacy payload compatibility (written before *_resets_at/schema_version existed)
 
     func test_decode_legacyAccountWithoutResetsAtFields_decodesWithNilResetsAt() throws {

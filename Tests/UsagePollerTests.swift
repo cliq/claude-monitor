@@ -182,13 +182,22 @@ final class UsagePollerTests: XCTestCase {
     }
 
     func test_formatReset_otherDayIncludesWeekday() {
-        // Deterministic regardless of wall clock — a far-future ISO date.
-        let future = Calendar.current.date(byAdding: .year, value: 5, to: Date())!
+        // Deterministic regardless of wall clock — tomorrow, well inside the
+        // window where a weekday is still unambiguous.
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
         let fmt = ISO8601DateFormatter()
-        let out = UsagePoller.formatReset(fmt.string(from: future))
+        let out = UsagePoller.formatReset(fmt.string(from: tomorrow))
         // "E HH:mm" — three-letter weekday, space, time.
         XCTAssertTrue(out.range(of: #"^[A-Z][a-z]{2} \d{2}:\d{2}$"#, options: .regularExpression) != nil,
                       "expected 'E HH:mm' format, got '\(out)'")
+    }
+
+    func test_formatReset_farFutureShowsDate() {
+        let future = Calendar.current.date(byAdding: .year, value: 5, to: Date())!
+        let fmt = ISO8601DateFormatter()
+        let out = UsagePoller.formatReset(fmt.string(from: future))
+        XCTAssertTrue(out.range(of: #"^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}$"#, options: .regularExpression) != nil,
+                      "expected 'MMM d HH:mm' format, got '\(out)'")
     }
 
     func test_formatReset_acceptsFractionalSeconds() {

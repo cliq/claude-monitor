@@ -93,8 +93,10 @@ enum CodexUsageMapper {
             }
         }
 
-        // Spend-control ("individual") limit — monthly only when the reset
-        // boundary supports that reading; the monitor never redeems credits.
+        // Spend-control ("individual") limit — Codex's own status card shows
+        // it as "<used> of <limit> credits used". The reset date in the
+        // footer says how often it refreshes; the monitor never redeems
+        // credits.
         var individualMetric: UsageMetric?
         if let individual = buckets.compactMap({ $0.snapshot.individualLimit }).first {
             var pct = individual.remainingPercent.map { 100 - $0 }
@@ -105,11 +107,11 @@ enum CodexUsageMapper {
             let iso = isoString(unixSeconds: individual.resetsAt)
             var detail: String?
             if let used = individual.used, let limit = individual.limit {
-                detail = "\(cleanAmount(used)) / \(cleanAmount(limit))"
+                detail = "\(cleanAmount(used)) / \(cleanAmount(limit)) credits"
             }
             individualMetric = UsageMetric(
                 id: "individual",
-                label: isMonthlyBoundary(unixSeconds: individual.resetsAt) ? "MONTHLY" : "INDIVIDUAL",
+                label: "SPEND",
                 usedPct: clampPct(pct),
                 resets: UsageFormat.formatReset(iso, now: now),
                 resetsAt: iso,
@@ -148,15 +150,46 @@ enum CodexUsageMapper {
             out.modelLabel = individualMetric.label
         }
 
-        // Exhausted state: keep the last valid percentages, surface the reason.
-        if buckets.contains(where: { $0.snapshot.spendControlReached == true }) {
+        // Exhausted state: keep the percentages, surface the reason. Only a
+        // refusal of ordinary usage (or a hit rate-limit window) is an error.
+        // A reached spend cap on its own — Business seats with a zero
+        // extra-spend allowance report it permanently while the plan
+        // allowance stays usable — is already visible as the 100% SPEND bar.
+        let spendCapReached = buckets.contains { $0.snapshot.spendControlReached == true }
+        var notes: [String] = []
+        if result.ordinaryUsageAllowed == false {
             out.status = "error"
-            out.error = "spend limit reached"
+            out.error = spendCapReached ? "spend limit reached" : "usage blocked"
         } else if buckets.contains(where: { $0.snapshot.rateLimitReachedType != nil }) {
             out.status = "error"
             out.error = "limit reached"
         }
+
+        // Purchased/granted credits: only mention a real balance.
+        if let credits = buckets.compactMap({ $0.snapshot.credits }).first {
+            if credits.unlimited == true {
+                notes.append("unlimited credits")
+            } else if let balance = credits.balance, let value = Double(balance), value > 0 {
+                notes.append("\(cleanAmount(balance)) credits")
+            }
+        }
+        out.note = notes.isEmpty ? nil : notes.joined(separator: " · ")
+        out.resetCredits = availableResetCredits(result.rateLimitResetCredits)
+        out.resetCreditsExpireAt = isoString(
+            unixSeconds: availableResetGrants(result.rateLimitResetCredits)?.compactMap(\.expiresAt).min())
         return out
+    }
+
+    /// Count of unredeemed reset grants. Prefers the explicit list (status
+    /// "available") and falls back to the server's own count.
+    nonisolated static func availableResetCredits(_ credits: CodexResetCredits?) -> Int? {
+        guard let credits else { return nil }
+        if let grants = availableResetGrants(credits) { return grants.count }
+        return credits.availableCount
+    }
+
+    private nonisolated static func availableResetGrants(_ credits: CodexResetCredits?) -> [CodexResetCredit]? {
+        credits?.credits?.filter { ($0.status ?? "available").lowercased() == "available" }
     }
 
     // MARK: - Helpers
@@ -196,12 +229,12 @@ enum CodexUsageMapper {
         return "\(Int((mins / 1440).rounded()))D"
     }
 
-    /// Amounts arrive as strings like "0.0" — drop a meaningless fraction for
-    /// display, leave anything non-numeric untouched.
+    /// Credit amounts arrive as strings like "0.0" or "1426.6314442157745".
+    /// Display them as whole credits; anything non-numeric is left untouched.
     nonisolated static func cleanAmount(_ amount: String) -> String {
-        guard let value = Double(amount), value == value.rounded(),
+        guard let value = Double(amount), value.isFinite,
               value.magnitude < Double(Int.max) else { return amount }
-        return String(Int(value))
+        return String(Int(value.rounded()))
     }
 
     nonisolated static func clampPct(_ value: Double?) -> Int {
@@ -216,12 +249,4 @@ enum CodexUsageMapper {
         return formatter.string(from: Date(timeIntervalSince1970: unixSeconds))
     }
 
-    /// True when the reset lands on the first day of a month (UTC) — the only
-    /// boundary we're willing to call "monthly" without guessing.
-    nonisolated static func isMonthlyBoundary(unixSeconds: Double?) -> Bool {
-        guard let unixSeconds else { return false }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        return calendar.component(.day, from: Date(timeIntervalSince1970: unixSeconds)) == 1
-    }
 }

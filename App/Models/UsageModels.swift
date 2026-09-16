@@ -39,6 +39,16 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
     var modelLabel: String = ""
     var metrics: [UsageMetric] = []
     var error: String?
+    /// Informational line shown alongside the plan (muted, not an error):
+    /// e.g. a Codex spend cap that is reached while plan usage continues, or
+    /// a purchased-credit balance. Additive wire key `note`.
+    var note: String?
+    /// Free rate-limit resets Codex has granted and not yet redeemed. The
+    /// monitor only reports the count. Additive wire key `reset_credits`.
+    var resetCredits: Int?
+    /// Earliest expiry (ISO 8601) among those resets, so the UI can warn
+    /// before one lapses. Additive wire key `reset_credits_expire_at`.
+    var resetCreditsExpireAt: String?
 
     /// Provider-qualified so a Claude and a Codex account sharing a display
     /// name never collide in SwiftUI lists. Not part of the wire schema.
@@ -59,7 +69,9 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, status, plan, error, provider, metrics
+        case name, status, plan, error, provider, metrics, note
+        case resetCredits = "reset_credits"
+        case resetCreditsExpireAt = "reset_credits_expire_at"
         case sessionPct = "session_pct"
         case sessionResets = "session_resets"
         case sessionResetsAt = "session_resets_at"
@@ -87,7 +99,10 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
          modelResetsAt: String? = nil,
          modelLabel: String = "",
          metrics: [UsageMetric] = [],
-         error: String? = nil) {
+         error: String? = nil,
+         note: String? = nil,
+         resetCredits: Int? = nil,
+         resetCreditsExpireAt: String? = nil) {
         self.provider = provider
         self.name = name
         self.status = status
@@ -104,6 +119,9 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
         self.modelLabel = modelLabel
         self.metrics = metrics
         self.error = error
+        self.note = note
+        self.resetCredits = resetCredits
+        self.resetCreditsExpireAt = resetCreditsExpireAt
     }
 
     // Custom decode so schema-v1 payloads (no provider/metrics) and unknown
@@ -127,6 +145,9 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
         modelLabel = try c.decodeIfPresent(String.self, forKey: .modelLabel) ?? ""
         metrics = try c.decodeIfPresent([UsageMetric].self, forKey: .metrics) ?? []
         error = try c.decodeIfPresent(String.self, forKey: .error)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        resetCredits = try c.decodeIfPresent(Int.self, forKey: .resetCredits)
+        resetCreditsExpireAt = try c.decodeIfPresent(String.self, forKey: .resetCreditsExpireAt)
     }
 }
 

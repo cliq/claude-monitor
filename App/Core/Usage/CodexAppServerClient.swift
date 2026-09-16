@@ -68,20 +68,65 @@ struct CodexIndividualLimit: Decodable, Equatable {
     }
 }
 
+/// Purchased/granted credit balance attached to a bucket. `balance` is an
+/// amount string like the individual-limit fields.
+struct CodexCredits: Decodable, Equatable {
+    var hasCredits: Bool?
+    var unlimited: Bool?
+    var balance: String?
+
+    init(hasCredits: Bool? = nil, unlimited: Bool? = nil, balance: String? = nil) {
+        self.hasCredits = hasCredits
+        self.unlimited = unlimited
+        self.balance = balance
+    }
+
+    enum CodingKeys: String, CodingKey { case hasCredits, unlimited, balance }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hasCredits = (try? c.decodeIfPresent(Bool.self, forKey: .hasCredits)) ?? nil
+        unlimited = (try? c.decodeIfPresent(Bool.self, forKey: .unlimited)) ?? nil
+        if let s = try? c.decodeIfPresent(String.self, forKey: .balance) { balance = s }
+        else if let d = try? c.decodeIfPresent(Double.self, forKey: .balance) { balance = String(d) }
+        else { balance = nil }
+    }
+}
+
 struct CodexRateLimitSnapshot: Decodable, Equatable {
     var limitId: String?
     var limitName: String?
     var primary: CodexRateLimitWindow?
     var secondary: CodexRateLimitWindow?
+    var credits: CodexCredits?
     var individualLimit: CodexIndividualLimit?
     var spendControlReached: Bool?
     var planType: String?
     var rateLimitReachedType: String?
 }
 
+/// One "free rate limit reset" grant. The monitor only counts these — it
+/// must never redeem them.
+struct CodexResetCredit: Decodable, Equatable {
+    var id: String?
+    var status: String?
+    var title: String?
+    var expiresAt: Double? // unix seconds
+}
+
+struct CodexResetCredits: Decodable, Equatable {
+    var availableCount: Int?
+    var credits: [CodexResetCredit]?
+}
+
 struct CodexRateLimitsResult: Decodable, Equatable {
     var rateLimits: CodexRateLimitSnapshot?
     var rateLimitsByLimitId: [String: CodexRateLimitSnapshot]?
+    /// False when Codex refuses ordinary requests (e.g. a spend cap that
+    /// blocks usage). `spendControlReached` alone does not imply that: Business
+    /// seats with a zero extra-spend cap report it while still fully usable.
+    var ordinaryUsageAllowed: Bool?
+    var rateLimitResetCredits: CodexResetCredits?
 }
 
 // MARK: - JSONL response accumulation
