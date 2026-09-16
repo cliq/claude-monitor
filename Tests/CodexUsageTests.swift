@@ -207,6 +207,31 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertEqual(out.weeklyPct, 25)
     }
 
+    // MARK: - Mapping: optional-metric groups
+
+    func test_summarize_tagsNamedBucketsAndSpendLimitAsGroups() throws {
+        let result = try decodeResult("""
+        {"rateLimitsByLimitId":{
+          "codex":{"limitId":"codex","primary":{"usedPercent":61,"windowDurationMins":10080},
+                   "individualLimit":{"limit":"2000","used":"125","remainingPercent":94}},
+          "codex_bengalfox":{"limitId":"codex_bengalfox","limitName":"GPT-5.3-Codex-Spark",
+                   "primary":{"usedPercent":0,"windowDurationMins":300},
+                   "secondary":{"usedPercent":0,"windowDurationMins":10080}}}}
+        """)
+        let out = CodexUsageMapper.summarize(result, name: "personal")
+        XCTAssertEqual(out.metrics.map(\.group), [nil, "individual", "codex_bengalfox", "codex_bengalfox"])
+        XCTAssertEqual(out.metrics.compactMap(\.groupLabel), ["Spend limit", "GPT-5.3-Codex-Spark", "GPT-5.3-Codex-Spark"])
+        XCTAssertEqual(UsageMetricGroup.groups(in: out.metrics),
+                       [UsageMetricGroup(key: "individual", label: "Spend limit"),
+                        UsageMetricGroup(key: "codex_bengalfox", label: "GPT-5.3-Codex-Spark")])
+
+        let hidden = out.hidingMetricGroups(["codex_bengalfox", "individual"])
+        XCTAssertEqual(hidden.metrics.map(\.label), ["WEEKLY"])
+        XCTAssertEqual(hidden.modelPct, -1, "hiding the spend limit clears the legacy model slot")
+        XCTAssertEqual(hidden.modelLabel, "")
+        XCTAssertEqual(out.hidingMetricGroups([]), out)
+    }
+
     // MARK: - Mapping: individual (spend-control) limit
 
     func test_summarize_individualLimit_isLabelledSpend() throws {

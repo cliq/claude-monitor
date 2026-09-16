@@ -11,6 +11,9 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     /// displays (widget, LAN bridge / ESP32). The panel always shows every
     /// polled account regardless.
     let showOnExternalDisplays: Bool
+    /// Optional-metric groups (`UsageMetricGroup.key`) the user unchecked for
+    /// this account in Settings → Usage. Disabled-list semantics.
+    let hiddenMetricGroups: Set<String>
 
     /// Provider-qualified so a Claude and a Codex account with the same
     /// display name never collide. Preferences stay keyed by `configDir`
@@ -18,11 +21,12 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     var id: String { "\(provider.rawValue):\(configDir)" }
 
     init(provider: AgentProvider = .claude, name: String, configDir: String,
-         showOnExternalDisplays: Bool = true) {
+         showOnExternalDisplays: Bool = true, hiddenMetricGroups: Set<String> = []) {
         self.provider = provider
         self.name = name
         self.configDir = configDir
         self.showOnExternalDisplays = showOnExternalDisplays
+        self.hiddenMetricGroups = hiddenMetricGroups
     }
 
     /// `.claudewho-personal` → "personal", `.claude` → "claude",
@@ -63,13 +67,14 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     /// The list the poller (and thus the panel and the ESP32) actually uses:
     /// ordered, minus disabled accounts, with custom names applied and each
     /// account flagged for external displays unless its dir is in
-    /// `externalHiddenDirs`. Blank or whitespace-only custom names fall back
-    /// to the derived name.
+    /// `externalHiddenDirs`, and carrying the metric groups hidden for it.
+    /// Blank or whitespace-only custom names fall back to the derived name.
     static func resolve(discovered: [UsageAccountConfig],
                         order: [String],
                         disabledDirs: Set<String>,
                         customNames: [String: String],
-                        externalHiddenDirs: Set<String> = []) -> [UsageAccountConfig] {
+                        externalHiddenDirs: Set<String> = [],
+                        hiddenMetricGroups: [String: [String]] = [:]) -> [UsageAccountConfig] {
         ordered(discovered: discovered, order: order)
             .filter { !disabledDirs.contains($0.configDir) }
             .map { account in
@@ -78,7 +83,8 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
                 return UsageAccountConfig(provider: account.provider,
                                           name: custom.isEmpty ? account.name : custom,
                                           configDir: account.configDir,
-                                          showOnExternalDisplays: !externalHiddenDirs.contains(account.configDir))
+                                          showOnExternalDisplays: !externalHiddenDirs.contains(account.configDir),
+                                          hiddenMetricGroups: Set(hiddenMetricGroups[account.configDir] ?? []))
             }
     }
 }

@@ -97,6 +97,38 @@ final class UsageModelsTests: XCTestCase {
         XCTAssertEqual(out.map(\.name), ["a"])
     }
 
+    func test_resolve_carriesHiddenMetricGroupsPerAccount() {
+        let out = UsageAccountConfig.resolve(
+            discovered: [a, b], order: [], disabledDirs: [], customNames: [:],
+            hiddenMetricGroups: ["/h/.claudewho-a": ["individual", "codex_bengalfox"]])
+        XCTAssertEqual(out[0].hiddenMetricGroups, ["individual", "codex_bengalfox"])
+        XCTAssertEqual(out[1].hiddenMetricGroups, [])
+    }
+
+    func test_hidingMetricGroups_leavesUngroupedAndLegacyAccountsAlone() {
+        var claude = AccountUsage(name: "personal", status: "ok")
+        claude.modelPct = 7
+        XCTAssertEqual(claude.hidingMetricGroups(["individual"]).modelPct, 7,
+                       "legacy trio has no metrics — nothing to hide")
+        var codex = AccountUsage(provider: .codex, name: "codex", status: "ok")
+        codex.metrics = [UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 25),
+                         UsageMetric(id: "x:0", label: "X", usedPct: 1, group: "x", groupLabel: "X")]
+        XCTAssertEqual(codex.hidingMetricGroups(["x"]).metrics.map(\.label), ["WEEKLY"])
+    }
+
+    func test_metricGroupKeysRoundTripAndDecodeAsAbsent() throws {
+        let metric = UsageMetric(id: "codex_bengalfox:0", label: "SPARK 5H", usedPct: 0,
+                                 group: "codex_bengalfox", groupLabel: "GPT-5.3-Codex-Spark")
+        let data = try JSONEncoder().encode(metric)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["group"] as? String, "codex_bengalfox")
+        XCTAssertEqual(json["group_label"] as? String, "GPT-5.3-Codex-Spark")
+        XCTAssertEqual(try JSONDecoder().decode(UsageMetric.self, from: data), metric)
+        let legacy = try JSONDecoder().decode(UsageMetric.self,
+                                              from: Data(#"{"id":"individual","label":"MONTHLY","used_pct":6,"resets":""}"#.utf8))
+        XCTAssertNil(legacy.group)
+    }
+
     func test_resolve_combinesOrderRenameAndDisable() {
         let out = UsageAccountConfig.resolve(
             discovered: [a, b, c],

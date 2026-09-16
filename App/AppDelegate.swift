@@ -200,10 +200,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Which accounts reach the widget / ESP32 is a pure filter over the
         // last results — republish from cache instead of hitting the API.
-        preferences.$externalHiddenUsageAccountDirs
-            .dropFirst()
+        Publishers.Merge(preferences.$externalHiddenUsageAccountDirs.dropFirst().map { _ in () },
+                         preferences.$hiddenUsageMetricGroups.dropFirst().map { _ in () })
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.republishUsageAccounts() }
+            .sink { [weak self] in self?.republishUsageAccounts() }
             .store(in: &usageCancellables)
 
         // 6. First-run onboarding.
@@ -247,7 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                order: prefs.usageAccountOrder,
                                                disabledDirs: prefs.disabledUsageAccountDirs,
                                                customNames: prefs.usageAccountNames,
-                                               externalHiddenDirs: prefs.externalHiddenUsageAccountDirs)
+                                               externalHiddenDirs: prefs.externalHiddenUsageAccountDirs,
+                                               hiddenMetricGroups: prefs.hiddenUsageMetricGroups)
                 }, publish: { [weak self] snapshot in
                     guard let self else { return }
                     UsageSnapshotStore.write(snapshot)
@@ -261,6 +262,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         WidgetCenter.shared.reloadTimelines(ofKind: UsageSnapshotStore.widgetKind)
                     }
                 })
+                // Remember which optional metrics each account offers so the
+                // Settings checkboxes exist without a handle on the poller.
+                usagePoller?.$metricGroupsByDir
+                    .dropFirst()
+                    .receive(on: RunLoop.main)
+                    .sink { [weak self] groups in
+                        guard let self else { return }
+                        var known = self.preferences.knownUsageMetricGroups
+                        for (dir, list) in groups { known[dir] = list }
+                        if known != self.preferences.knownUsageMetricGroups {
+                            self.preferences.knownUsageMetricGroups = known
+                        }
+                    }
+                    .store(in: &usageCancellables)
             }
             usagePoller?.start()
         } else {

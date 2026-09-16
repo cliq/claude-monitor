@@ -119,6 +119,23 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(externalHiddenUsageAccountDirs.sorted(), forKey: Self.externalHiddenUsageAccountsKey) }
     }
 
+    /// Optional-metric groups hidden per usage account (config-dir path →
+    /// `UsageMetricGroup.key`s such as a Codex model bucket id or
+    /// `"individual"` for the spend limit). Disabled-list semantics: the
+    /// default shows every metric the provider returns.
+    @Published var hiddenUsageMetricGroups: [String: [String]] {
+        didSet { defaults.set(hiddenUsageMetricGroups, forKey: Self.hiddenUsageMetricGroupsKey) }
+    }
+
+    /// The optional-metric groups each account offered on its last poll, so
+    /// Settings → Usage can list checkboxes without holding the poller (and
+    /// still shows them before the first poll after a relaunch).
+    @Published var knownUsageMetricGroups: [String: [UsageMetricGroup]] {
+        didSet {
+            defaults.set(try? JSONEncoder().encode(knownUsageMetricGroups), forKey: Self.knownUsageMetricGroupsKey)
+        }
+    }
+
     /// When true, the floating usage panel uses a denser single-row-per-account
     /// layout that takes roughly a third of the vertical space.
     @Published var usagePanelCompact: Bool {
@@ -195,6 +212,8 @@ final class Preferences: ObservableObject {
     private static let usageAccountOrderKey = "usageAccountOrder"
     private static let externalHiddenUsageAccountsKey = "externalHiddenUsageAccountDirs"
     private static let usagePanelCompactKey = "usagePanelCompact"
+    private static let hiddenUsageMetricGroupsKey = "hiddenUsageMetricGroups"
+    private static let knownUsageMetricGroupsKey = "knownUsageMetricGroups"
 
     /// AppKit's autosave format is "x y w h screenX screenY screenW screenH";
     /// only the leading window rect matters here.
@@ -248,6 +267,9 @@ final class Preferences: ObservableObject {
         self.usageAccountOrder = defaults.stringArray(forKey: Self.usageAccountOrderKey) ?? []
         self.externalHiddenUsageAccountDirs = Set(defaults.stringArray(forKey: Self.externalHiddenUsageAccountsKey) ?? [])
         self.usagePanelCompact = defaults.bool(forKey: Self.usagePanelCompactKey)
+        self.hiddenUsageMetricGroups = (defaults.dictionary(forKey: Self.hiddenUsageMetricGroupsKey) as? [String: [String]]) ?? [:]
+        self.knownUsageMetricGroups = defaults.data(forKey: Self.knownUsageMetricGroupsKey)
+            .flatMap { try? JSONDecoder().decode([String: [UsageMetricGroup]].self, from: $0) } ?? [:]
 
         self.prowlEnabled = defaults.bool(forKey: Self.prowlEnabledKey)
         self.prowlOfflineHookEnabled = defaults.bool(forKey: Self.prowlOfflineKey)

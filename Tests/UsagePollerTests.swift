@@ -15,7 +15,52 @@ private final class CountingFetcher: UsageFetching, @unchecked Sendable {
     }
 }
 
+/// Answers like a Codex account with a named model bucket and a spend limit.
+private struct GroupedFetcher: UsageFetching {
+    func fetch(account: UsageAccountConfig) async throws -> AccountUsage {
+        var usage = AccountUsage(provider: .codex, name: account.name, status: "ok", modelPct: 6, modelLabel: "SPEND")
+        usage.metrics = [
+            UsageMetric(id: "codex:0", label: "WEEKLY", usedPct: 61),
+            UsageMetric(id: "individual", label: "SPEND", usedPct: 6, group: "individual", groupLabel: "Spend limit"),
+            UsageMetric(id: "codex_bengalfox:0", label: "SPARK 5H", usedPct: 0,
+                        group: "codex_bengalfox", groupLabel: "GPT-5.3-Codex-Spark"),
+        ]
+        return usage
+    }
+}
+
 final class UsagePollerTests: XCTestCase {
+    // MARK: - optional metric groups
+
+    @MainActor
+    func test_hiddenMetricGroups_filterPanelAndExternalButKeepGroupList() async {
+        var configs = [UsageAccountConfig(provider: .codex, name: "personal", configDir: "/h/.codexwho-personal")]
+        var published: [UsageSnapshot] = []
+        let poller = UsagePoller(accountsProvider: { configs },
+                                 publish: { published.append($0) },
+                                 fetchers: [.codex: GroupedFetcher()])
+        await poller.pollAll()
+        XCTAssertEqual(poller.accounts.first?.metrics.map(\.label), ["WEEKLY", "SPEND", "SPARK 5H"])
+        XCTAssertEqual(poller.metricGroupsByDir["/h/.codexwho-personal"]?.map(\.label),
+                       ["Spend limit", "GPT-5.3-Codex-Spark"])
+
+        // User unchecks Spark and the spend limit — cache-only republish.
+        configs = [UsageAccountConfig(provider: .codex, name: "personal", configDir: "/h/.codexwho-personal",
+                                      hiddenMetricGroups: ["codex_bengalfox", "individual"])]
+        poller.republish()
+        XCTAssertEqual(poller.accounts.first?.metrics.map(\.label), ["WEEKLY"])
+        XCTAssertEqual(poller.accounts.first?.modelPct, -1)
+        XCTAssertEqual(published.last?.accounts.first?.metrics.map(\.label), ["WEEKLY"])
+        XCTAssertEqual(poller.metricGroupsByDir["/h/.codexwho-personal"]?.count, 2,
+                       "Settings must keep offering hidden groups so they can be re-enabled")
+
+        // Re-checking restores them from the cached unfiltered result.
+        configs = [UsageAccountConfig(provider: .codex, name: "personal", configDir: "/h/.codexwho-personal")]
+        poller.republish()
+        XCTAssertEqual(poller.accounts.first?.metrics.count, 3)
+        XCTAssertEqual(poller.accounts.first?.modelPct, 6)
+    }
+
     // MARK: - external snapshot / republish
 
     private let personal = UsageAccountConfig(name: "personal", configDir: "/h/.claudewho-personal")

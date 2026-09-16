@@ -32,6 +32,12 @@ struct UsageSettingsView: View {
             accountsSection
                 .disabled(!preferences.usageMonitorEnabled)
 
+            if !metricGroupAccounts.isEmpty {
+                Divider()
+                metricGroupsSection
+                    .disabled(!preferences.usageMonitorEnabled)
+            }
+
             Divider()
 
             panelSection
@@ -101,12 +107,7 @@ struct UsageSettingsView: View {
             TextField(account.name, text: nameBinding(for: account))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 140)
-            Text(account.provider.displayName)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(Capsule().fill(.quaternary))
+            providerBadge(account.provider)
             Text(account.configDir)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -120,6 +121,15 @@ struct UsageSettingsView: View {
                 .disabled(!polled)
                 .help("Show this account on the widget and the ESP32 panel")
         }
+    }
+
+    private func providerBadge(_ provider: AgentProvider) -> some View {
+        Text(provider.displayName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(.quaternary))
     }
 
     /// Disabled-list semantics, same as polling: checked = not hidden.
@@ -159,6 +169,71 @@ struct UsageSettingsView: View {
                     preferences.usageAccountNames.removeValue(forKey: account.configDir)
                 } else {
                     preferences.usageAccountNames[account.configDir] = newValue
+                }
+            }
+        )
+    }
+
+    // MARK: - Optional metrics (Codex model allowances, spend limit)
+
+    /// Polled accounts whose last poll returned optional-metric groups, in
+    /// the accounts' display order. Only Codex reports these today.
+    private var metricGroupAccounts: [(account: UsageAccountConfig, groups: [UsageMetricGroup])] {
+        accounts.compactMap { account in
+            guard !preferences.disabledUsageAccountDirs.contains(account.configDir),
+                  let groups = preferences.knownUsageMetricGroups[account.configDir],
+                  !groups.isEmpty else { return nil }
+            return (account, groups)
+        }
+    }
+
+    @ViewBuilder
+    private var metricGroupsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Optional metrics").font(.subheadline.weight(.semibold))
+            ForEach(metricGroupAccounts, id: \.account.id) { entry in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    HStack(spacing: 6) {
+                        Text(displayName(for: entry.account))
+                            .font(.callout.weight(.medium))
+                            .lineLimit(1)
+                        providerBadge(entry.account.provider)
+                    }
+                    .frame(width: 180, alignment: .leading)
+                    ForEach(entry.groups) { group in
+                        Toggle(group.label, isOn: metricGroupBinding(dir: entry.account.configDir, group: group.key))
+                            .toggleStyle(.checkbox)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            Text("Extra limits some accounts report — a model's own allowance (e.g. GPT-5.3-Codex-Spark) or the workspace spend limit. Unchecked metrics are left off the usage panel, the widget, and the ESP32 panel.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func displayName(for account: UsageAccountConfig) -> String {
+        let custom = preferences.usageAccountNames[account.configDir]?.trimmingCharacters(in: .whitespaces) ?? ""
+        return custom.isEmpty ? account.name : custom
+    }
+
+    /// Disabled-list semantics: checked = group not hidden for that account.
+    private func metricGroupBinding(dir: String, group: String) -> Binding<Bool> {
+        Binding(
+            get: { !(preferences.hiddenUsageMetricGroups[dir] ?? []).contains(group) },
+            set: { shown in
+                var hidden = preferences.hiddenUsageMetricGroups[dir] ?? []
+                if shown {
+                    hidden.removeAll { $0 == group }
+                } else if !hidden.contains(group) {
+                    hidden.append(group)
+                }
+                if hidden.isEmpty {
+                    preferences.hiddenUsageMetricGroups.removeValue(forKey: dir)
+                } else {
+                    preferences.hiddenUsageMetricGroups[dir] = hidden
                 }
             }
         )

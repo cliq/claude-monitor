@@ -29,6 +29,8 @@ final class PreferencesUsageTests: XCTestCase {
         XCTAssertEqual(prefs.usageAccountOrder, [])
         XCTAssertEqual(prefs.externalHiddenUsageAccountDirs, [])
         XCTAssertFalse(prefs.usagePanelCompact)
+        XCTAssertEqual(prefs.hiddenUsageMetricGroups, [:])
+        XCTAssertEqual(prefs.knownUsageMetricGroups, [:])
     }
 
     func test_usagePanelFrameRoundTripAndLegacySeed() {
@@ -68,6 +70,9 @@ final class PreferencesUsageTests: XCTestCase {
         prefs.usageAccountOrder = ["/h/.claudewho-b", "/h/.claudewho-a"]
         prefs.externalHiddenUsageAccountDirs = ["/h/.claudewho-a"]
         prefs.usagePanelCompact = true
+        prefs.hiddenUsageMetricGroups = ["/h/.codexwho-a": ["codex_bengalfox"]]
+        prefs.knownUsageMetricGroups = ["/h/.codexwho-a": [UsageMetricGroup(key: "codex_bengalfox", label: "GPT-5.3-Codex-Spark"),
+                                                           UsageMetricGroup(key: "individual", label: "Spend limit")]]
 
         let reloaded = Preferences(defaults: defaults)
         XCTAssertTrue(reloaded.showUsagePanel)
@@ -76,6 +81,8 @@ final class PreferencesUsageTests: XCTestCase {
         XCTAssertEqual(reloaded.usageAccountOrder, ["/h/.claudewho-b", "/h/.claudewho-a"])
         XCTAssertEqual(reloaded.externalHiddenUsageAccountDirs, ["/h/.claudewho-a"])
         XCTAssertTrue(reloaded.usagePanelCompact)
+        XCTAssertEqual(reloaded.hiddenUsageMetricGroups, ["/h/.codexwho-a": ["codex_bengalfox"]])
+        XCTAssertEqual(reloaded.knownUsageMetricGroups["/h/.codexwho-a"]?.map(\.key), ["codex_bengalfox", "individual"])
     }
 
     func test_usagePreferencesRoundTrip() {

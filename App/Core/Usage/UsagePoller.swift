@@ -20,6 +20,10 @@ final class UsagePoller: ObservableObject {
     @Published var accounts: [AccountUsage] = []
     @Published var updatedAt: Date?
     @Published var displayOn: Bool = true
+    /// Optional-metric groups each polled account offers (from the unfiltered
+    /// results), keyed by config dir — what Settings → Usage lists as
+    /// per-account checkboxes. Independent of what the user has hidden.
+    @Published private(set) var metricGroupsByDir: [String: [UsageMetricGroup]] = [:]
 
     /// Below this the Anthropic API 429s; the same cadence keeps Codex
     /// subprocess churn low.
@@ -103,6 +107,7 @@ final class UsagePoller: ObservableObject {
         }
         lastResultsByDir = Dictionary(results.map { ($0.config.configDir, $0.usage) },
                                       uniquingKeysWith: { first, _ in first })
+        metricGroupsByDir = lastResultsByDir.mapValues { UsageMetricGroup.groups(in: $0.metrics) }
         apply(results)
         updatedAt = Date()
         // @Published emits on willSet, so an external Combine sink observing
@@ -111,8 +116,9 @@ final class UsagePoller: ObservableObject {
         publish(externalSnapshot())
     }
 
-    /// Re-applies the current account preferences to the last poll's results
-    /// and republishes, without fetching. Accounts that have never been polled
+    /// Re-applies the current account preferences (names, external flags,
+    /// hidden metric groups) to the last poll's results and republishes,
+    /// without fetching. Accounts that have never been polled
     /// (newly enabled) are skipped until the next `pollAll()`; `updatedAt` is
     /// left alone because the numbers are not fresher than before.
     func republish() {
@@ -127,8 +133,9 @@ final class UsagePoller: ObservableObject {
     }
 
     private func apply(_ results: [(config: UsageAccountConfig, usage: AccountUsage)]) {
-        accounts = results.map { $0.usage }
-        externalAccounts = results.filter { $0.config.showOnExternalDisplays }.map { $0.usage }
+        let shown = results.map { (config: $0.config, usage: $0.usage.hidingMetricGroups($0.config.hiddenMetricGroups)) }
+        accounts = shown.map { $0.usage }
+        externalAccounts = shown.filter { $0.config.showOnExternalDisplays }.map { $0.usage }
     }
 
     // Thin forwarders so existing call sites (and `Tests/UsagePollerTests.swift`)

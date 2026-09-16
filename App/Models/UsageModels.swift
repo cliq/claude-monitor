@@ -11,11 +11,39 @@ struct UsageMetric: Codable, Hashable, Identifiable {
     var resets: String = ""
     var resetsAt: String?
     var detail: String?
+    /// Optional-metric group this belongs to (`UsageMetricGroup.key`): the
+    /// Codex bucket id for a named model allowance, `"individual"` for the
+    /// spend limit. Metrics without a group are always shown. Additive wire
+    /// keys `group` / `group_label`.
+    var group: String?
+    var groupLabel: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, resets, detail
+        case id, label, resets, detail, group
         case usedPct = "used_pct"
         case resetsAt = "resets_at"
+        case groupLabel = "group_label"
+    }
+}
+
+/// One user-toggleable set of metrics on an account (Settings → Usage lists
+/// the groups the last poll returned, e.g. "GPT-5.3-Codex-Spark" or
+/// "Spend limit"). `key` is what preferences store.
+struct UsageMetricGroup: Codable, Hashable, Identifiable {
+    var key: String
+    var label: String
+    var id: String { key }
+
+    static let spendLimitKey = "individual"
+
+    /// Distinct groups in first-appearance order.
+    static func groups(in metrics: [UsageMetric]) -> [UsageMetricGroup] {
+        var seen = Set<String>()
+        return metrics.compactMap { metric in
+            guard let key = metric.group, !seen.contains(key) else { return nil }
+            seen.insert(key)
+            return UsageMetricGroup(key: key, label: metric.groupLabel ?? key)
+        }
     }
 }
 
@@ -53,6 +81,25 @@ struct AccountUsage: Codable, Identifiable, Equatable, Hashable {
     /// Provider-qualified so a Claude and a Codex account sharing a display
     /// name never collide in SwiftUI lists. Not part of the wire schema.
     var id: String { "\(provider.rawValue):\(name)" }
+
+    /// The same account without the metrics in `hidden` groups. Hiding the
+    /// spend limit also clears the legacy model slot it feeds, so the ESP32
+    /// adapter fields agree with `metrics`.
+    func hidingMetricGroups(_ hidden: Set<String>) -> AccountUsage {
+        guard !hidden.isEmpty else { return self }
+        var out = self
+        out.metrics = metrics.filter { metric in
+            guard let group = metric.group else { return true }
+            return !hidden.contains(group)
+        }
+        if hidden.contains(UsageMetricGroup.spendLimitKey), !metrics.isEmpty {
+            out.modelPct = -1
+            out.modelResets = ""
+            out.modelResetsAt = nil
+            out.modelLabel = ""
+        }
+        return out
+    }
 
     /// What the panel/widget render: `metrics` when populated (Codex), else
     /// the legacy three-slot layout (Claude accounts and schema-v1 snapshots).

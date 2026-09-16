@@ -84,12 +84,17 @@ enum CodexUsageMapper {
                     default:       label = durationLabel(duration)
                     }
                 }
-                windows.append(ClassifiedWindow(
-                    metric: UsageMetric(id: "\(key):\(index)", label: label,
-                                        usedPct: clampPct(window.usedPercent),
-                                        resets: UsageFormat.formatReset(iso, now: now),
-                                        resetsAt: iso),
-                    durationMins: duration, kind: kind))
+                var metric = UsageMetric(id: "\(key):\(index)", label: label,
+                                         usedPct: clampPct(window.usedPercent),
+                                         resets: UsageFormat.formatReset(iso, now: now),
+                                         resetsAt: iso)
+                if kind == .named {
+                    // Named buckets are optional model allowances the user
+                    // can hide per account (Settings → Usage).
+                    metric.group = key
+                    metric.groupLabel = bucketName
+                }
+                windows.append(ClassifiedWindow(metric: metric, durationMins: duration, kind: kind))
             }
         }
 
@@ -115,7 +120,9 @@ enum CodexUsageMapper {
                 usedPct: clampPct(pct),
                 resets: UsageFormat.formatReset(iso, now: now),
                 resetsAt: iso,
-                detail: detail)
+                detail: detail,
+                group: UsageMetricGroup.spendLimitKey,
+                groupLabel: "Spend limit")
         }
 
         // Priority order: session, weekly, monthly/individual, other
