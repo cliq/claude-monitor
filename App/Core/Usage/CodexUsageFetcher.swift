@@ -73,9 +73,10 @@ enum CodexUsageMapper {
                 let label: String
                 if !bucketName.isEmpty {
                     kind = .named
+                    let short = shortBucketLabel(bucketName)
                     label = bucketWindows.count > 1
-                        ? "\(bucketName.uppercased()) \(durationLabel(duration))"
-                        : bucketName.uppercased()
+                        ? "\(short) \(durationLabel(duration))"
+                        : short
                 } else {
                     kind = classify(duration)
                     switch kind {
@@ -90,9 +91,13 @@ enum CodexUsageMapper {
                                          resetsAt: iso)
                 if kind == .named {
                     // Named buckets are optional model allowances the user
-                    // can hide per account (Settings → Usage).
+                    // can hide per account (Settings → Usage). The cell label
+                    // is the short form; the full name rides in the detail.
                     metric.group = key
                     metric.groupLabel = bucketName
+                    if shortBucketLabel(bucketName) != bucketName.uppercased() {
+                        metric.detail = bucketName
+                    }
                 }
                 windows.append(ClassifiedWindow(metric: metric, durationMins: duration, kind: kind))
             }
@@ -218,6 +223,17 @@ enum CodexUsageMapper {
         default:
             return key.replacingOccurrences(of: "_", with: " ").uppercased()
         }
+    }
+
+    /// Cell label for a named bucket: the last hyphen-separated part of the
+    /// name Codex sends ("GPT-5.3-Codex-Spark" → "SPARK"), because the full
+    /// name doesn't fit a metric cell. Falls back to the whole name when the
+    /// tail has no letters ("GPT-5" → "GPT-5") — still derived, never guessed.
+    nonisolated static func shortBucketLabel(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let tail = trimmed.split(separator: "-").last.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
+        guard tail.rangeOfCharacter(from: .letters) != nil else { return trimmed.uppercased() }
+        return tail.uppercased()
     }
 
     private nonisolated static func classify(_ durationMins: Double?) -> Kind {

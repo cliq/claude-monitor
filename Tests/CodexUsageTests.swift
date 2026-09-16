@@ -200,7 +200,9 @@ final class CodexUsageTests: XCTestCase {
 
         let out = CodexUsageMapper.summarize(result, name: "codex")
         // The stale single snapshot is ignored; named-bucket windows come last.
+        // A name without hyphens is used whole, and needs no detail line.
         XCTAssertEqual(out.metrics.map(\.label), ["WEEKLY", "BENGAL FOX 5H", "BENGAL FOX 7D"])
+        XCTAssertEqual(out.metrics.compactMap(\.detail), [])
         XCTAssertEqual(out.plan, "TEAM")
         // Named buckets never feed the legacy session/weekly slots.
         XCTAssertEqual(out.sessionPct, -1)
@@ -221,6 +223,9 @@ final class CodexUsageTests: XCTestCase {
         let out = CodexUsageMapper.summarize(result, name: "personal")
         XCTAssertEqual(out.metrics.map(\.group), [nil, "individual", "codex_bengalfox", "codex_bengalfox"])
         XCTAssertEqual(out.metrics.compactMap(\.groupLabel), ["Spend limit", "GPT-5.3-Codex-Spark", "GPT-5.3-Codex-Spark"])
+        // Hyphenated model names shrink to their tail; the full name is the detail.
+        XCTAssertEqual(out.metrics.map(\.label), ["WEEKLY", "SPEND", "SPARK 5H", "SPARK 7D"])
+        XCTAssertEqual(out.metrics.last?.detail, "GPT-5.3-Codex-Spark")
         XCTAssertEqual(UsageMetricGroup.groups(in: out.metrics),
                        [UsageMetricGroup(key: "individual", label: "Spend limit"),
                         UsageMetricGroup(key: "codex_bengalfox", label: "GPT-5.3-Codex-Spark")])
@@ -230,6 +235,13 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertEqual(hidden.modelPct, -1, "hiding the spend limit clears the legacy model slot")
         XCTAssertEqual(hidden.modelLabel, "")
         XCTAssertEqual(out.hidingMetricGroups([]), out)
+    }
+
+    func test_shortBucketLabel() {
+        XCTAssertEqual(CodexUsageMapper.shortBucketLabel("GPT-5.3-Codex-Spark"), "SPARK")
+        XCTAssertEqual(CodexUsageMapper.shortBucketLabel("Bengal Fox"), "BENGAL FOX")
+        XCTAssertEqual(CodexUsageMapper.shortBucketLabel("GPT-5"), "GPT-5") // numeric tail → whole name
+        XCTAssertEqual(CodexUsageMapper.shortBucketLabel(" Codex-Mini "), "MINI")
     }
 
     // MARK: - Mapping: individual (spend-control) limit
