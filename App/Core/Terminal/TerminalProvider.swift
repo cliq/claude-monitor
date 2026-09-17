@@ -7,7 +7,14 @@ protocol TerminalProvider {
     var bundleID: String { get }
     var isInstalled: Bool { get }
     func isRunning() -> Bool
+    /// True when `focus` can bring the app up itself (e.g. by opening a URL),
+    /// so the bridge should consult the provider even while it is not running.
+    var launchesOnFocus: Bool { get }
     func focus(tty: String, expectedPid: Int32) -> FocusResult
+}
+
+extension TerminalProvider {
+    var launchesOnFocus: Bool { false }
 }
 
 /// Test double. Behavior is scripted via closures.
@@ -15,6 +22,7 @@ final class FakeTerminalProvider: TerminalProvider {
     let displayName: String
     let bundleID: String
     var isInstalled: Bool
+    var launchesOnFocus: Bool
     var runningHandler: () -> Bool
     var focusHandler: (String, Int32) -> FocusResult
     private(set) var focusCallCount: Int = 0
@@ -23,11 +31,13 @@ final class FakeTerminalProvider: TerminalProvider {
     init(displayName: String,
          bundleID: String,
          isInstalled: Bool = true,
+         launchesOnFocus: Bool = false,
          runningHandler: @escaping () -> Bool = { true },
          focusHandler: @escaping (String, Int32) -> FocusResult = { _, _ in .noSuchTab }) {
         self.displayName = displayName
         self.bundleID = bundleID
         self.isInstalled = isInstalled
+        self.launchesOnFocus = launchesOnFocus
         self.runningHandler = runningHandler
         self.focusHandler = focusHandler
     }

@@ -3,7 +3,8 @@ import Foundation
 import Darwin
 
 /// Fans `focus(tty:expectedPid:)` out across a list of `TerminalProvider`s
-/// and returns on the first `.focused`. Non-running providers are skipped.
+/// and returns on the first `.focused`. Non-running providers are skipped
+/// unless they declare `launchesOnFocus`.
 final class CompositeTerminalBridge: TerminalBridgeProtocol {
     private let providers: [TerminalProvider]
     private let isDisabled: (String) -> Bool
@@ -25,7 +26,7 @@ final class CompositeTerminalBridge: TerminalBridgeProtocol {
         // EPERM means alive but owned elsewhere. Only ESRCH is a stale session.
         if kill(expectedPid, 0) != 0 && errno == ESRCH { return .noSuchTab }
 
-        let running = enabled.filter { $0.isRunning() }
+        let running = enabled.filter { $0.launchesOnFocus || $0.isRunning() }
         if running.isEmpty { return .terminalNotRunning }
 
         var lastError: FocusResult?

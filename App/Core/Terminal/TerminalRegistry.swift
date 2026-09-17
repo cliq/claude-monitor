@@ -7,6 +7,10 @@ import Foundation
 /// To add another terminal: implement a `TerminalProvider` and add it to `all`.
 enum TerminalRegistry {
     static let all: [TerminalProvider] = [
+        // Chauffeur goes first: its sessions are identified by an environment
+        // variable, so they must be claimed before the AppleScript providers
+        // scan ttys (Chauffeur reuses ttys inside tmux).
+        ChauffeurProvider(),
         AppleTerminalProvider(),
         ITerm2Provider(),
         OrcaProvider(),

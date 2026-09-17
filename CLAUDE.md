@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session (and, since the Codex integration, OpenAI Codex CLI sessions) as colored tiles. Each session reports transitions through agent lifecycle hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, and Orca are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session (and, since the Codex integration, OpenAI Codex CLI sessions) as colored tiles. Each session reports transitions through agent lifecycle hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, Orca, and Chauffeur are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
 ## Build / test
 
@@ -164,6 +164,24 @@ bundled CLI (`Orca.app/Contents/Resources/bin/orca terminal switch --terminal
 raises the window. If the handle is stale (Orca restart) it still activates the
 app and returns `.focused`, because the env already proved no other provider
 can match.
+
+`ChauffeurProvider` (Chauffeur, bundle id `dev.cliq.chauffeur`, debug builds
+`dev.cliq.chauffeur.debug`) also has no AppleScript path and no tty mapping —
+sessions run in private tmux panes, so `TERM_PROGRAM` is `tmux`. Chauffeur
+exports `CHAUFFEUR_SESSION_URL` (a `chauffeur://session/<project>/<session>`
+deep link; `chauffeur-debug://` in debug builds) into every process it launches.
+The provider reads it via `ps eww`, accepts only those two schemes with host
+`session`, and opens the URL verbatim with `NSWorkspace` — never rebuild it
+from `CHAUFFEUR_SESSION_ID`. Opening the link launches Chauffeur if needed and
+focuses the session, so the provider declares `launchesOnFocus` (a
+`TerminalProvider` requirement defaulting to `false`) and the composite
+consults it even while the app is closed. It sits first in `TerminalRegistry.all`
+so Chauffeur-hosted sessions never fall through to tty scanning.
+`IntegrationTests/ChauffeurProviderIntegrationTests` drives the real provider and
+the real registry against a live Chauffeur-hosted agent process (run with
+`TEST_RUNNER_RUN_TERMINAL_INTEGRATION=1`, optionally `TEST_RUNNER_CHAUFFEUR_TEST_PID`);
+note `ps eww` cannot read a zsh login shell's environment, only the agent
+process itself, so target the `claude`/`codex` pid.
 
 User-disabled terminals come from `preferences.disabledTerminalBundleIDs`
 (Settings: "Terminal applications" section). Disabled-list semantics mean the

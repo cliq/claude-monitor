@@ -77,6 +77,30 @@ final class CompositeTerminalBridgeTests: XCTestCase {
         XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
     }
 
+    func test_notRunningProviderThatLaunchesOnFocus_isConsulted() {
+        // Opening a deep link launches the app, so the running check must not
+        // hide such a provider while it is closed.
+        let launcher = FakeTerminalProvider(displayName: "A", bundleID: "a",
+                                            launchesOnFocus: true,
+                                            runningHandler: { false },
+                                            focusHandler: { _, _ in .focused })
+        let bridge = makeBridge([launcher])
+        XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .focused)
+        XCTAssertEqual(launcher.focusCallCount, 1)
+    }
+
+    func test_launchesOnFocusProvider_stillHonoursDisabledList() {
+        let launcher = FakeTerminalProvider(displayName: "A", bundleID: "off",
+                                            launchesOnFocus: true,
+                                            runningHandler: { false },
+                                            focusHandler: { _, _ in
+            XCTFail("disabled provider must not be called")
+            return .focused
+        })
+        let bridge = CompositeTerminalBridge(providers: [launcher], isDisabled: { $0 == "off" })
+        XCTAssertEqual(bridge.focus(tty: "/dev/ttys001", expectedPid: livePid), .terminalNotRunning)
+    }
+
     func test_allProvidersNotRunning_returnsTerminalNotRunning() {
         let p = FakeTerminalProvider(displayName: "A", bundleID: "a",
                                      runningHandler: { false })

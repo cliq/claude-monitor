@@ -20,7 +20,7 @@ Each tile represents one session and is one of five states:
   <img src="docs/images/dashboard-states.png" alt="Three Claude Monitor tiles showing Working, Needs you, and Waiting states" width="227" />
 </p>
 
-Clicking a tile brings its Terminal.app, iTerm2, or [Orca](https://onorca.dev) tab to the front.
+Clicking a tile brings its Terminal.app, iTerm2, [Orca](https://onorca.dev), or [Chauffeur](https://github.com/cliq/chauffeur) session to the front.
 
 ## How it works
 
@@ -28,7 +28,7 @@ Clicking a tile brings its Terminal.app, iTerm2, or [Orca](https://onorca.dev) t
 2. When Claude Code fires a hook, the script POSTs an enriched event (session id, tty, pid, cwd) to a local HTTP server the app is running on `127.0.0.1`.
 3. The app maps each event through a state machine and updates the tile.
    While a Claude session has background tasks, the app also checks its local transcript every five seconds for task completion or cancellation records. This clears stale task counts even when cancelling a task does not fire another hook.
-4. Clicking a tile asks each enabled terminal provider to focus the hosting tab; the first match wins. Terminal.app and iTerm2 are driven over AppleScript by `tty`; Orca is driven through its bundled CLI using the terminal handle found in the session's environment.
+4. Clicking a tile asks each enabled terminal provider to focus the hosting tab; the first match wins. Terminal.app and iTerm2 are driven over AppleScript by `tty`; Orca is driven through its bundled CLI using the terminal handle found in the session's environment; Chauffeur is driven by opening the `chauffeur://session/…` deep link it exports into the session's environment, which also launches the app if it is closed.
 
 Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 
@@ -84,7 +84,7 @@ make monitor      # serial console at 115200 baud
 ## Requirements
 
 - macOS 14 or later
-- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac), [iTerm2](https://iterm2.com), or [Orca](https://onorca.dev) (Ghostty, WezTerm, VS Code terminals, and others are not yet supported)
+- [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac), [iTerm2](https://iterm2.com), [Orca](https://onorca.dev), or [Chauffeur](https://github.com/cliq/chauffeur)
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) and/or [OpenAI Codex CLI](https://developers.openai.com/codex/cli/)
 
 ## Install
