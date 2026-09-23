@@ -14,6 +14,7 @@ final class UsagePanelWindow {
     private let preferences: Preferences
     private var closeObserver: NSObjectProtocol?
     private var frameObservers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var needsFrameRestore = true
     /// Where the panel's top-left corner should stay. The panel isn't user-
     /// resizable, so every resize comes from SwiftUI content (accounts coming
@@ -46,12 +47,14 @@ final class UsagePanelWindow {
             forName: NSWindow.willCloseNotification, object: panel, queue: .main
         ) { _ in onUserClose() }
         observeFrameChanges()
+        observeScreenChanges()
     }
 
     deinit {
         let center = NotificationCenter.default
         if let observer = closeObserver { center.removeObserver(observer) }
         frameObservers.forEach { center.removeObserver($0) }
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
     var isVisible: Bool { window.isVisible }
@@ -91,9 +94,13 @@ final class UsagePanelWindow {
         let center = NotificationCenter.default
         frameObservers = [
             center.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak self] _ in
-                guard let self, NSEvent.pressedMouseButtons != 0 else { return }
-                self.preferences.usagePanelWindowFrame = self.window.frame
+                guard let self else { return }
+                // Follow system moves (a display going away evacuates the panel)
+                // with the resize anchor, so a content resize doesn't yank it back
+                // onto the missing screen — but only user drags are persisted.
                 self.anchoredTopLeft = self.topLeft(of: self.window.frame)
+                guard NSEvent.pressedMouseButtons != 0 else { return }
+                self.preferences.usagePanelWindowFrame = self.window.frame
             },
             center.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self] _ in
                 guard let self, let anchor = self.anchoredTopLeft,
@@ -101,6 +108,38 @@ final class UsagePanelWindow {
                 self.window.setFrameTopLeftPoint(anchor)
             },
         ]
+    }
+
+    /// Mirrors `DashboardWindow`: when displays detach (often while asleep)
+    /// AppKit evacuates the panel onto a surviving screen; snap back to the
+    /// saved spot once that screen returns. Wake retries are staggered because
+    /// external monitors can take seconds to renegotiate, and
+    /// `didChangeScreenParameters` may fire before `NSScreen.screens` catches up.
+    private func observeScreenChanges() {
+        frameObservers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.restoreSavedPositionIfPossible()
+        })
+        workspaceObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            for delay in [0, 0.5, 1.5, 3, 5, 8] as [TimeInterval] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.restoreSavedPositionIfPossible()
+                }
+            }
+        })
+    }
+
+    private func restoreSavedPositionIfPossible() {
+        // Before the first show, `showAndBringToFront` does the restore itself.
+        guard !needsFrameRestore,
+              let target = Self.restoredTopLeft(saved: preferences.usagePanelWindowFrame,
+                                                screens: NSScreen.screens.map(\.frame)),
+              topLeft(of: window.frame) != target else { return }
+        window.setFrameTopLeftPoint(target)
+        anchoredTopLeft = topLeft(of: window.frame)
     }
 
     func hide() { window.orderOut(nil) }
