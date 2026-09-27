@@ -40,6 +40,30 @@ final class UsageBridgeServerTests: XCTestCase {
         XCTAssertEqual(status, 200)
     }
 
+    func test_panelEndpointServesFullSnapshot() async throws {
+        let external = UsageSnapshot(updatedAt: nil, accounts: [AccountUsage(name: "shown", status: "ok")])
+        let panel = UsageSnapshot(updatedAt: nil, accounts: [AccountUsage(name: "shown", status: "ok"),
+                                                             AccountUsage(name: "hidden", status: "ok")])
+        let server = UsageBridgeServer(snapshot: { external }, panel: { panel }, display: { true })
+        try server.start(port: 0)
+        defer { server.stop() }
+        let port = try XCTUnwrap(server.port)
+
+        let (_, usageData) = try await get("/usage", port: port)
+        XCTAssertEqual(try JSONDecoder().decode(UsageSnapshot.self, from: usageData).accounts.map(\.name), ["shown"])
+        let (status, panelData) = try await get("/panel", port: port)
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(try JSONDecoder().decode(UsageSnapshot.self, from: panelData).accounts.map(\.name), ["shown", "hidden"])
+    }
+
+    func test_panelEndpointFallsBackToSnapshot() async throws {
+        let server = try makeServer()
+        defer { server.stop() }
+        let (status, data) = try await get("/panel", port: try XCTUnwrap(server.port))
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(try JSONDecoder().decode(UsageSnapshot.self, from: data).accounts.map(\.name), ["personal"])
+    }
+
     func test_displayEndpointReflectsDisplayState() async throws {
         let onServer = try makeServer(displayOn: true)
         defer { onServer.stop() }

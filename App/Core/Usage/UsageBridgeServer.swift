@@ -1,8 +1,11 @@
 import Foundation
 import Network
 
-/// Minimal HTTP server serving the ESP32 desk display over the LAN:
-///   GET /usage   -> usage snapshot JSON (schema the firmware expects)
+/// Minimal HTTP server serving the ESP32 desk display and the iOS app over the LAN:
+///   GET /usage   -> usage snapshot JSON (schema the firmware expects), only
+///                   the accounts checked for external displays
+///   GET /panel   -> same schema with every polled account — the full usage
+///                   panel, as the iOS app renders it
 ///   GET /display -> "on" | "off" (Mac display power state, plain text)
 ///
 /// Unlike `EventServer` (loopback, ephemeral port published via the port file),
@@ -10,26 +13,38 @@ import Network
 /// polls it over WiFi. Pass port 0 to bind an ephemeral port (tests).
 final class UsageBridgeServer {
     static let defaultPort: UInt16 = 8737
+    /// Bonjour service type the iOS app browses for. Must match
+    /// `NSBonjourServices` in the iOS target's Info.plist.
+    static let bonjourServiceType = "_claudemonitor._tcp"
 
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "com.cliqconsulting.claudemonitor.usagebridge")
     private let snapshotProvider: @MainActor () -> UsageSnapshot
+    private let panelProvider: @MainActor () -> UsageSnapshot
     private let displayProvider: @MainActor () -> Bool
 
     /// Live port after `start()`. Nil before or on failure.
     private(set) var port: UInt16?
 
+    /// `panel` defaults to `snapshot` when the caller has no wider view.
     init(snapshot: @escaping @MainActor () -> UsageSnapshot,
+         panel: (@MainActor () -> UsageSnapshot)? = nil,
          display: @escaping @MainActor () -> Bool) {
         self.snapshotProvider = snapshot
+        self.panelProvider = panel ?? snapshot
         self.displayProvider = display
     }
 
-    func start(port requestedPort: UInt16 = UsageBridgeServer.defaultPort) throws {
+    /// `advertise` publishes the listener over Bonjour (named after this Mac)
+    /// so the iOS app can find it without typing an address. Off for tests.
+    func start(port requestedPort: UInt16 = UsageBridgeServer.defaultPort, advertise: Bool = false) throws {
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         let nwPort: NWEndpoint.Port = requestedPort == 0 ? .any : NWEndpoint.Port(rawValue: requestedPort)!
         let listener = try NWListener(using: params, on: nwPort)
+        if advertise {
+            listener.service = NWListener.Service(type: Self.bonjourServiceType)
+        }
         self.listener = listener
 
         listener.newConnectionHandler = { [weak self] connection in
@@ -91,6 +106,9 @@ final class UsageBridgeServer {
             switch path {
             case "/usage":
                 let json = (try? JSONEncoder().encode(self.snapshotProvider())) ?? Data("{}".utf8)
+                (status, body, ctype) = ("200 OK", json, "application/json")
+            case "/panel":
+                let json = (try? JSONEncoder().encode(self.panelProvider())) ?? Data("{}".utf8)
                 (status, body, ctype) = ("200 OK", json, "application/json")
             case "/display":
                 let on = self.displayProvider()

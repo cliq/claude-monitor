@@ -4,6 +4,7 @@
 // APP_BUNDLE_ID:    A unique bundle identifier you control. Only override if you
 //                   can't use the default com.cliqconsulting.claudemonitor (e.g.
 //                   signing under a personal team).
+// IOS_APP_BUNDLE_ID: Bundle id of the iPhone app. Defaults to $(APP_BUNDLE_ID).ios.
 // APP_GROUP_ID:     Derives automatically from DEVELOPMENT_TEAM + APP_BUNDLE_ID —
 //                   only override if you changed APP_BUNDLE_ID above.
 

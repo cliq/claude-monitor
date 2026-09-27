@@ -71,7 +71,9 @@ UsageAccountConfig.discover() — Claude dirs via ConfigDirectoryDiscovery.scan(
     one-row-per-account rendering (`usagePanelCompact`)
   → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
     the ESP32 desk panel (esp32-claude-monitor firmware); serves
-    `poller.externalSnapshot()`
+    `poller.externalSnapshot()`. GET /panel serves `poller.snapshot()` (every
+    account) for the iOS app; the listener advertises `_claudemonitor._tcp`
+    over Bonjour
   → UsageSnapshotStore — usage-snapshot.json in the App Group container,
     written after each poll (UsagePoller's injected `publish` hook, which
     also receives the external snapshot)
@@ -104,6 +106,28 @@ The widget never polls or touches the keychain: it renders the last `UsageSnapsh
 - **Ad-hoc builds cannot exercise the widget** (`make install` signs with `CODE_SIGN_IDENTITY=-`; no team ID → the group entitlement doesn't validate). Test widgets from a team-signed build installed in `/Applications` — widget registration is path-sensitive, and a DerivedData copy makes `pluginkit` register a stale path so `WidgetCenter` reloads appear to do nothing.
 - Files shared into the widget target are listed explicitly in `project.yml` (`UsageModels`, `AgentProvider`, `RGB`, `UsagePalette`, `UsageFormatting`, `UsageSnapshotStore`). They must stay Foundation/SwiftUI-pure: no AppKit windows, keychain, discovery, or `Bundle.main` resource lookups. The widget kind string `"UsageWidget"` (`UsageSnapshotStore.widgetKind`) must never change — it's how the app targets reloads and how macOS tracks placed widgets.
 - Widget views must derive "now" from `entry.date`, never `Date()`, so archived timeline entries render honestly; staleness threshold is the shared `UsageFormat.staleAfter` (= `UsagePoller.pollInterval * 3`).
+
+### iOS app
+
+`ClaudeMonitorMobile` (scheme of the same name, sources in `iOS/`, tests in `iOSTests/`) is an iPhone/iPad app that
+currently shows only the usage panel. It never polls Anthropic/Codex itself: it reads the Mac's cached snapshot from
+`UsageBridgeServer` `/panel` (falling back to `/usage` on 404 for Mac builds that predate it) every 30s while in the
+foreground. Macs are found with `NWBrowser` on `_claudemonitor._tcp` or typed as `host[:port]`; requests are raw HTTP over
+`NWConnection` (`BridgeClient`), so Bonjour endpoints need no resolve step and ATS doesn't apply. The service type must stay
+in sync across `UsageBridgeServer.bonjourServiceType`, `BridgeEndpoint.serviceType` and `NSBonjourServices` in `project.yml`.
+
+The account rows are the shared `App/UI/UsageAccountRow.swift` (also used by the macOS `UsagePanelView`) — keep it pure
+SwiftUI. Shared model files are listed explicitly in the iOS target in `project.yml`, same rule as the widget. Signing and
+the bundle id come from `Configuration/iOS.xcconfig` → `Base.xcconfig` (`IOS_APP_BUNDLE_ID`, default
+`$(APP_BUNDLE_ID).ios`, overridable in `LocalSigning.xcconfig`). `make test-ios IOS_DESTINATION='platform=iOS
+Simulator,id=<udid>'` runs its tests.
+
+`ClaudeMonitorMobileWidget` (sources in `iOSWidget/`) is the Home Screen widget. It reuses the Mac widget's
+`UsageWidgetView`/`UsageEntry` (`Widget/`), but since the iOS app only runs in the foreground, its timeline provider fetches
+`/usage` (the Mac's "Widget · ESP32" selection) from the Mac itself on each reload and caches the last good snapshot with
+`UsageSnapshotStore` for when the Mac is unreachable. The selected Mac is shared through `BridgeEndpointStore` in the App
+Group's defaults. The iOS group is `IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)` — not team-prefixed like the Mac one;
+automatic signing registers it. The app only calls `reloadTimelines` when the Mac's `updated_at` changes.
 
 ### Update checks
 

@@ -267,7 +267,7 @@ struct UsageSettingsView: View {
             Toggle("Turn external displays off when this Mac's screen is off",
                    isOn: $preferences.usageBridgeMirrorsDisplay)
                 .disabled(!preferences.usageBridgeEnabled)
-            Text("Devices on your network (e.g. the ESP32 desk panel) can read the snapshot at http://<this-mac>:\(preferences.usageBridgePort)/usage and the display power state at /display. Anyone on your LAN can see these numbers while this is on.")
+            Text("Devices on your network (e.g. the ESP32 desk panel) can read the snapshot at http://<this-mac>:\(preferences.usageBridgePort)/usage and the display power state at /display. The Claude Monitor iPhone app finds this Mac over Bonjour and shows every account from /panel. Anyone on your LAN can see these numbers while this is on.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

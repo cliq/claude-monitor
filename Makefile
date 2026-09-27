@@ -1,4 +1,4 @@
-.PHONY: gen test test-integration clean open release install release-signed install-signed
+.PHONY: gen test test-integration test-ios build-ios clean open release install release-signed install-signed
 
 RELEASE_APP := build/release/Build/Products/Release/ClaudeMonitor.app
 
@@ -18,6 +18,22 @@ test-integration:
 	  -scheme ClaudeMonitor \
 	  -destination 'platform=macOS' \
 	  -only-testing:ClaudeMonitorIntegrationTests
+
+# iPhone app. Override the simulator with e.g.
+#   make test-ios IOS_DESTINATION='platform=iOS Simulator,id=<udid>'
+IOS_DESTINATION ?= platform=iOS Simulator,name=iPhone 16
+
+test-ios:
+	set -o pipefail && xcodebuild test \
+	  -project ClaudeMonitor.xcodeproj \
+	  -scheme ClaudeMonitorMobile \
+	  -destination '$(IOS_DESTINATION)'
+
+build-ios:
+	set -o pipefail && xcodebuild build \
+	  -project ClaudeMonitor.xcodeproj \
+	  -scheme ClaudeMonitorMobile \
+	  -destination 'generic/platform=iOS Simulator'
 
 clean:
 	rm -rf ClaudeMonitor.xcodeproj build

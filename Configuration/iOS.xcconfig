@@ -1,0 +1,9 @@
+// iOS app + its tests. Signing team and bundle ids come from Base.xcconfig,
+// which pulls in the gitignored LocalSigning.xcconfig (DEVELOPMENT_TEAM,
+// APP_BUNDLE_ID, IOS_APP_BUNDLE_ID overrides).
+#include "Base.xcconfig"
+
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+TARGETED_DEVICE_FAMILY = 1,2
+IPHONEOS_DEPLOYMENT_TARGET = 17.0

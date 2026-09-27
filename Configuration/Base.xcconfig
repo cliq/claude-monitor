@@ -5,6 +5,12 @@ CODE_SIGN_IDENTITY = Apple Development
 
 APP_BUNDLE_ID = com.cliqconsulting.claudemonitor
 
+// The iPhone app (Configuration/iOS.xcconfig). Separate App ID from the Mac app.
+IOS_APP_BUNDLE_ID = $(APP_BUNDLE_ID).ios
+// iOS App Groups aren't team-prefixed: "group." ids are registered on the
+// developer portal (automatic signing does it with -allowProvisioningUpdates).
+IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)
+
 // Team-prefixed App Group shared by app + widget. Team-prefixed groups need
 // no provisioning profile for Developer ID.
 APP_GROUP_ID = $(DEVELOPMENT_TEAM).com.cliqconsulting.claudemonitor

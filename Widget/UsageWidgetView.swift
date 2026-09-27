@@ -5,6 +5,12 @@ import WidgetKit
 struct UsageWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: UsageEntry
+    /// When the snapshot counts as stale (dimmed values, "as of"). The Mac
+    /// widget reloads on every poll, so it uses the panel rule; the iOS
+    /// widget refreshes on WidgetKit's budget and passes a longer window.
+    var staleAfter: TimeInterval = UsageFormat.staleAfter
+    var emptyTitle = "Usage monitoring off"
+    var emptyHint = "open ClaudeMonitor"
 
     var body: some View {
         Group {
@@ -19,10 +25,10 @@ struct UsageWidgetView: View {
 
     private var emptyState: some View {
         VStack(spacing: 4) {
-            Text("Usage monitoring off")
+            Text(emptyTitle)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(UsagePalette.muted)
-            Text("open ClaudeMonitor")
+            Text(emptyHint)
                 .font(.system(size: 9))
                 .foregroundStyle(UsagePalette.idle)
         }
@@ -32,7 +38,7 @@ struct UsageWidgetView: View {
     @ViewBuilder
     private func content(for snapshot: UsageSnapshot) -> some View {
         let updated = parseDate(snapshot.updatedAt)
-        let isStale = entry.date.timeIntervalSince(updated ?? .distantPast) > UsageFormat.staleAfter
+        let isStale = entry.date.timeIntervalSince(updated ?? .distantPast) > staleAfter
 
         switch family {
         case .systemSmall:

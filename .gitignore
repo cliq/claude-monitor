@@ -8,6 +8,8 @@ xcuserdata/
 ClaudeMonitor.xcodeproj/
 App/Info.plist
 Widget/Info.plist
+iOS/Info.plist
+iOSWidget/Info.plist
 default.profraw
 
 # Isolated git worktrees for branch work

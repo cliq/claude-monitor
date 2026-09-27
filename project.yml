@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.cliqconsulting.claudemonitor
   deploymentTarget:
     macOS: "14.0"
+    iOS: "17.0"
   developmentLanguage: en
 settings:
   base:
@@ -29,6 +30,15 @@ schemes:
         - ClaudeMonitorUITests
       # The hosted test app detects XCTest itself (`AppDelegate.isUnitTestHost`)
       # and skips its launch sequence, so no environment override is needed here.
+  ClaudeMonitorMobile:
+    build:
+      targets:
+        ClaudeMonitorMobile: all
+        ClaudeMonitorMobileWidget: [build]
+        ClaudeMonitorMobileTests: [test]
+    test:
+      targets:
+        - ClaudeMonitorMobileTests
 targets:
   ClaudeMonitor:
     type: application
@@ -150,3 +160,102 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).widget
         CODE_SIGN_ENTITLEMENTS: Widget/ClaudeMonitorWidget.entitlements
+  # iPhone app: renders the usage panel from the Mac's LAN bridge
+  # (UsageBridgeServer `/panel`), found over Bonjour or by address.
+  ClaudeMonitorMobile:
+    type: application
+    platform: iOS
+    configFiles:
+      Debug: Configuration/iOS.xcconfig
+      Release: Configuration/iOS.xcconfig
+    sources:
+      - path: iOS
+      - path: App/Models/UsageModels.swift
+      - path: App/Models/AgentProvider.swift
+      - path: App/Models/RGB.swift
+      - path: App/UI/UsagePalette.swift
+      - path: App/UI/UsageAccountRow.swift
+      - path: App/Core/Usage/UsageFormatting.swift
+      - path: App/Core/Usage/UsageSnapshotStore.swift
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Claude Monitor
+        AppGroupIdentifier: $(IOS_APP_GROUP_ID)
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSHumanReadableCopyright: "Copyright © 2026 Cliq Consulting LLC. All rights reserved."
+        NSLocalNetworkUsageDescription: "Claude Monitor reads usage limits from the Claude Monitor app on your Mac over your local network."
+        # Must match UsageBridgeServer.bonjourServiceType / BridgeEndpoint.serviceType.
+        NSBonjourServices:
+          - _claudemonitor._tcp
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_NAME: ClaudeMonitorMobile
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_APP_BUNDLE_ID)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: iOS/ClaudeMonitorMobile.entitlements
+    dependencies:
+      - target: ClaudeMonitorMobileWidget
+        embed: true
+  # Home Screen widget. Reuses the Mac widget's view; fetches `/usage` from
+  # the Mac the app selected (shared through the App Group).
+  ClaudeMonitorMobileWidget:
+    type: app-extension
+    platform: iOS
+    configFiles:
+      Debug: Configuration/iOS.xcconfig
+      Release: Configuration/iOS.xcconfig
+    sources:
+      - path: iOSWidget
+      - path: Widget/UsageWidgetView.swift
+      - path: Widget/UsageEntry.swift
+      - path: iOS/BridgeEndpoint.swift
+      - path: iOS/BridgeClient.swift
+      - path: App/Models/UsageModels.swift
+      - path: App/Models/AgentProvider.swift
+      - path: App/Models/RGB.swift
+      - path: App/UI/UsagePalette.swift
+      - path: App/Core/Usage/UsageFormatting.swift
+      - path: App/Core/Usage/UsageSnapshotStore.swift
+    info:
+      path: iOSWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        CFBundleDisplayName: Claude Usage
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        AppGroupIdentifier: $(IOS_APP_GROUP_ID)
+        NSLocalNetworkUsageDescription: "Claude Monitor reads usage limits from the Claude Monitor app on your Mac over your local network."
+        NSBonjourServices:
+          - _claudemonitor._tcp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_APP_BUNDLE_ID).widget
+        CODE_SIGN_ENTITLEMENTS: iOSWidget/ClaudeMonitorMobileWidget.entitlements
+  ClaudeMonitorMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    configFiles:
+      Debug: Configuration/iOS.xcconfig
+      Release: Configuration/iOS.xcconfig
+    sources:
+      - path: iOSTests
+    dependencies:
+      - target: ClaudeMonitorMobile
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_APP_BUNDLE_ID).tests

@@ -295,9 +295,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if wantBridge, usageBridge == nil, let poller = usagePoller {
             let prefs = preferences
             let bridge = UsageBridgeServer(snapshot: { poller.externalSnapshot() },
+                                           panel: { poller.snapshot() },
                                            display: { prefs.usageBridgeMirrorsDisplay ? poller.displayOn : true })
             do {
-                try bridge.start(port: desiredPort)
+                try bridge.start(port: desiredPort, advertise: true)
                 usageBridge = bridge
             } catch {
                 NSLog("UsageBridgeServer: failed to start on port \(desiredPort) — \(error)")

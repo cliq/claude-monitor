@@ -62,6 +62,10 @@ Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accoun
 
 The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`, port configurable) so an external display can render it — see below. The **Widget · ESP32** checkmarks in Settings → Usage pick which accounts go to the widget and the LAN feed; the in-app panel always shows every polled account.
 
+## iPhone app (optional)
+
+`iOS/` holds an iPhone/iPad app (scheme `ClaudeMonitorMobile`) that shows the same usage panel, read from the Mac over your LAN. With **Serve usage to external displays** on, the Mac advertises itself over Bonjour and the app lists it under *Choose Mac*; you can also type the Mac's address. The phone shows every polled account, not just the Widget · ESP32 selection. Its Home Screen widget (small, medium, large) shows the Widget · ESP32 selection, fetching from the Mac on WidgetKit's refresh schedule and falling back to the last snapshot when you're away from home.
+
 ## ESP32 desk panel (optional)
 
 <p align="center">
