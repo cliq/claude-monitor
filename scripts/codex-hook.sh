@@ -22,9 +22,43 @@ STDIN_JSON="$(cat 2>/dev/null)"
 [ -n "$STDIN_JSON" ] || STDIN_JSON="{}"
 
 # Context capture.
+# Since Codex 0.159 the TUI is a client of a shared `codex app-server` daemon
+# (one per CODEX_HOME, started by whichever session came first), and hooks run
+# as children of that daemon. Its pid is shared by every session and outlives
+# them, it has no tty, and its environment belongs to the session that started
+# it (e.g. a stale CHAUFFEUR_SESSION_URL), so it must never be reported. Codex
+# does not tell hooks which client owns the thread, so look for the one TUI
+# with the daemon's CODEX_HOME whose cwd is the session cwd. Zero or several
+# matches report pid 0 rather than guess: a wrong pid would focus another
+# session's terminal, or keep this tile alive after its TUI exits.
+SOURCE_PID="$PPID"
+# A per-task `codex app-server` over stdio (e.g. the Codex companion plugin)
+# lives and dies with its session, so only the managed daemon is replaced.
+if ps -o command= -p "$PPID" 2>/dev/null | grep -q 'app-server.*--managed-daemon'; then
+  SOURCE_PID=0
+  HOOK_CWD="$(pwd -P)"
+  MATCHES=""
+  while read -r CANDIDATE COMMAND; do
+    case "${COMMAND%% *}" in */codex|codex) ;; *) continue ;; esac
+    case "$COMMAND" in *app-server*) continue ;; esac
+    CANDIDATE_ENV="$(ps eww -o command= -p "$CANDIDATE" 2>/dev/null) "
+    if [ -n "${CODEX_HOME+set}" ]; then
+      case "$CANDIDATE_ENV" in *" CODEX_HOME=$CODEX_HOME "*) ;; *) continue ;; esac
+    else
+      case "$CANDIDATE_ENV" in *" CODEX_HOME="*) continue ;; esac
+    fi
+    CANDIDATE_CWD="$(lsof -a -p "$CANDIDATE" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
+    [ "$CANDIDATE_CWD" = "$HOOK_CWD" ] || continue
+    MATCHES="$MATCHES $CANDIDATE"
+  done < <(ps -axo pid=,command= 2>/dev/null)
+  set -- $MATCHES
+  [ "$#" -eq 1 ] && SOURCE_PID="$1"
+fi
+
 # TTY: the hook JSON is piped on stdin, so `tty` on our own fd never works. Ask
-# the kernel for the parent codex process's controlling terminal instead.
-TTY_RAW="$(ps -o tty= -p "$PPID" 2>/dev/null | awk '{print $1}')"
+# the kernel for the codex process's controlling terminal instead.
+TTY_RAW=""
+[ "$SOURCE_PID" -gt 0 ] && TTY_RAW="$(ps -o tty= -p "$SOURCE_PID" 2>/dev/null | awk '{print $1}')"
 case "$TTY_RAW" in
   ""|\?|\?\?)   TTY_VAL="" ;;
   /dev/*)       TTY_VAL="$TTY_RAW" ;;
@@ -32,7 +66,7 @@ case "$TTY_RAW" in
   s[0-9]*|p[0-9]*) TTY_VAL="/dev/tty$TTY_RAW" ;;
   *)            TTY_VAL="/dev/$TTY_RAW" ;;
 esac
-PID_VAL="$PPID"   # the codex process that invoked us
+PID_VAL="$SOURCE_PID"   # the codex TUI, or 0 when it can't be identified
 CWD_VAL="$(pwd)"
 TS_VAL="$(date +%s)"
 export HOOK_NAME TTY_VAL PID_VAL CWD_VAL TS_VAL

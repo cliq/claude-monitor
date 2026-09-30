@@ -4,7 +4,9 @@ import XCTest
 
 final class CodexHookScriptTests: XCTestCase {
 
-    private func runScript(hook: String, stdin: String, expectEvent: Bool = true) async throws -> HookEvent? {
+    private func runScript(hook: String, stdin: String, expectEvent: Bool = true,
+                           underManagedDaemon: Bool = false, cwd: URL? = nil,
+                           codexHome: String? = nil) async throws -> HookEvent? {
         let scriptURL = try XCTUnwrap(findScript(), "could not find codex-hook.sh")
 
         var received: [HookEvent] = []
@@ -31,10 +33,20 @@ final class CodexHookScriptTests: XCTestCase {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-        proc.arguments = [scriptURL.path, hook]
+        if underManagedDaemon {
+            // A parent bash whose command line looks like Codex's shared daemon
+            // (`codex app-server --listen unix:// --managed-daemon`). The trailing
+            // `exit` keeps bash from exec'ing the hook, so it stays the parent.
+            proc.arguments = ["-c", "/bin/bash \"$1\" \"$2\"; exit 0",
+                              "codex app-server --listen unix:// --managed-daemon", scriptURL.path, hook]
+        } else {
+            proc.arguments = [scriptURL.path, hook]
+        }
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = tmpHome.path
+        if let codexHome { env["CODEX_HOME"] = codexHome }
         proc.environment = env
+        if let cwd { proc.currentDirectoryURL = cwd }
 
         let inputPipe = Pipe()
         let outputPipe = Pipe()
@@ -131,6 +143,54 @@ final class CodexHookScriptTests: XCTestCase {
         XCTAssertEqual(event.toolName, "Bash")
     }
 
+    func test_directParentIsReportedAsTheCodexProcess() async throws {
+        let received = try await runScript(hook: "Stop", stdin: #"{"session_id":"s"}"#)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, getpid(), "without the daemon, the hook's parent is the codex process")
+    }
+
+    func test_managedDaemonParentIsReplacedByTheMatchingTUI() async throws {
+        let fixture = try FakeCodexTUI()
+        defer { fixture.stop() }
+        let tui = try fixture.launch()
+
+        let received = try await runScript(
+            hook: "UserPromptSubmit", stdin: #"{"session_id":"s","prompt":"hi"}"#,
+            underManagedDaemon: true, cwd: fixture.project, codexHome: fixture.codexHome)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, tui.processIdentifier,
+                       "the daemon's pid is shared by every session and never exits")
+    }
+
+    func test_managedDaemonParentWithoutAMatchingTUIReportsNoProcess() async throws {
+        let fixture = try FakeCodexTUI()
+        defer { fixture.stop() }
+        _ = try fixture.launch()
+
+        // Same CODEX_HOME, different cwd: some other session's TUI.
+        let elsewhere = fixture.root.appendingPathComponent("elsewhere")
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            underManagedDaemon: true, cwd: elsewhere, codexHome: fixture.codexHome)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, 0)
+        XCTAssertEqual(event.tty, "")
+    }
+
+    func test_managedDaemonParentWithSeveralMatchingTUIsReportsNoProcess() async throws {
+        let fixture = try FakeCodexTUI()
+        defer { fixture.stop() }
+        _ = try fixture.launch()
+        _ = try fixture.launch()
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            underManagedDaemon: true, cwd: fixture.project, codexHome: fixture.codexHome)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, 0, "guessing could focus another session's terminal")
+    }
+
     /// Resolve the codex-hook.sh location — bundled test resource first, repo fallback.
     private func findScript() -> URL? {
         if let inBundle = Bundle(for: Self.self).url(forResource: "codex-hook", withExtension: "sh") {
@@ -145,5 +205,53 @@ final class CodexHookScriptTests: XCTestCase {
             cursor.deleteLastPathComponent()
         }
         return nil
+    }
+}
+
+/// A long-running process whose executable is `…/codex`, started in `project` with
+/// a private `CODEX_HOME`, so real Codex TUIs on the machine never match it.
+private final class FakeCodexTUI {
+    let root: URL
+    let project: URL
+    let codexHome: String
+    private let executable: URL
+    private var processes: [Process] = []
+
+    init() throws {
+        root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("claude-monitor-fakecodex-\(UUID().uuidString)")
+        project = root.appendingPathComponent("project")
+        codexHome = root.appendingPathComponent("codex-home").path
+        executable = root.appendingPathComponent("bin/codex")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        // An ad-hoc signed copy, not a symlink: `ps eww` hides the environment
+        // of Apple platform binaries, and the hook matches on CODEX_HOME there.
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
+        let sign = Process()
+        sign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        sign.arguments = ["-f", "-s", "-", executable.path]
+        sign.standardError = FileHandle.nullDevice
+        try sign.run()
+        sign.waitUntilExit()
+    }
+
+    func launch() throws -> Process {
+        let proc = Process()
+        proc.executableURL = executable
+        proc.arguments = ["30"]
+        proc.currentDirectoryURL = project
+        var env = ProcessInfo.processInfo.environment
+        env["CODEX_HOME"] = codexHome
+        proc.environment = env
+        try proc.run()
+        processes.append(proc)
+        return proc
+    }
+
+    func stop() {
+        processes.forEach { $0.terminate() }
+        try? FileManager.default.removeItem(at: root)
     }
 }
