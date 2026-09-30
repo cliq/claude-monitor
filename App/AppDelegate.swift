@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var usagePanelWindow: UsagePanelWindow?
     private var usageCancellables: Set<AnyCancellable> = []
     private var lastPublishedAccountsHash: Int?
+    private let sessionPersistence = SessionPersistence(location: SessionPersistence.defaultLocation)
+    private var sessionCancellables: Set<AnyCancellable> = []
 
     /// True when this process is the host for the unit-test bundle (XCTest is
     /// loaded into it). `xcodebuild test` launches the real app binary to run
@@ -131,6 +133,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notifier?.handle(event: event)
         })
         storeRef = store
+
+        // 1c. Bring back the sessions from before this launch, before any event
+        //     can arrive: the last snapshot, plus Claude Code's own session
+        //     records (they cover a first run with no snapshot and sessions whose
+        //     state changed while the app was down). Then keep the snapshot current.
+        let restored = sessionPersistence.load()
+        let seeded = ClaudeSessionSeeder().sessions(
+            configDirs: preferences.managedConfigDirectoryPaths.map { URL(fileURLWithPath: $0) })
+        store.restore(SessionPersistence.merge(restored: restored, seeded: seeded),
+                      ignoredSessionIds: restored.ignoredSessionIds)
+        store.$orderedSessions.map { _ in () }
+            .merge(with: store.$ignoredSessionIds.map { _ in () })
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] in self?.saveSessions() }
+            .store(in: &sessionCancellables)
 
         // 2. Start the HTTP server and publish its port.
         server = EventServer { [weak self] event in
@@ -344,6 +361,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             guard preferences.usageMonitorEnabled, let poller = usagePoller else { return }
             poller.republish()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // The debounced save may not have fired yet for the last event.
+        saveSessions()
+    }
+
+    private func saveSessions() {
+        guard let store else { return }
+        do {
+            try sessionPersistence.save(sessions: store.orderedSessions,
+                                        ignoredSessionIds: store.ignoredSessionIds)
+        } catch {
+            NSLog("SessionPersistence: save failed — \(error)")
         }
     }
 

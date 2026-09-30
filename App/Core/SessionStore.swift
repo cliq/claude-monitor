@@ -110,6 +110,16 @@ final class SessionStore: ObservableObject {
                         transcriptPath: transcriptPath, backgroundTaskIDs: Array(remaining).sorted()))
     }
 
+    /// Brings back sessions from before a restart (see `SessionPersistence`)
+    /// without going through the state machine, which would reset them to
+    /// `waiting`. Sessions already known from a live event win.
+    func restore(_ sessions: [Session], ignoredSessionIds ignored: Set<String>) {
+        let known = Set(orderedSessions.map(\.id))
+        let added = sessions.filter { !known.contains($0.id) }
+        orderedSessions.append(contentsOf: added)
+        ignoredSessionIds.formUnion(ignored.intersection(added.map(\.id)))
+    }
+
     /// Remove a session immediately (used by the terminal focus stale-tab path
     /// and the StaleSessionSweeper). No-op if unknown.
     func markFinished(sessionId: String) {

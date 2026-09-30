@@ -140,6 +140,13 @@ Everything the app writes outside the sandbox goes under `~/.claude-monitor/`:
 - `hook.sh` — copied from the app bundle by `HookScriptDeployer`. Must be `0755`.
 - `port` — ephemeral TCP port the server is listening on, written atomically (`.tmp` + rename) by `PortFileWriter`.
 - `pid` — single-instance lockfile checked by `SingleInstanceGuard` with `kill(pid, 0)`.
+- `sessions.json` — dashboard snapshot written by `SessionPersistence` (1s-debounced on store changes, and on quit), so
+  restarts keep sessions that won't fire another hook soon (e.g. `needsYou`). Each entry records its process's kernel
+  start time (`ProcessProbe`), and launch restores only sessions whose exact process still runs; `pid <= 0` sessions are
+  never saved. Launch also seeds Claude sessions from Claude Code's own `<configDir>/sessions/<pid>.json` records
+  (`ClaudeSessionSeeder`: `busy` → working, `idle` → needsYou after 60s, `procStart` is UTC) for managed dirs, which
+  covers a first run without a snapshot and state changes while the app was down. Restores go through
+  `SessionStore.restore`, never `apply` — the state machine would reset them to `waiting`.
 
 Hook entries are installed **into the user's Claude config directories**, not this one. `HookInstaller` edits `<configDir>/settings.json` (e.g. `~/.claude/settings.json`, `~/.claudewho-work/settings.json`) and only touches objects tagged `"_managedBy": "claude-monitor"`. `ConfigDirectoryDiscovery` auto-finds these by matching `.claude` or `.claudewho-*`.
 

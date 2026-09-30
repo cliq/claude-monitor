@@ -1,7 +1,7 @@
 // App/Models/Session.swift
 import Foundation
 
-struct Session: Identifiable, Equatable {
+struct Session: Identifiable, Equatable, Codable {
     let id: String                  // session_id from the agent CLI; Codex/pi ids arrive namespaced "codex:<uuid>"/"pi:<uuid>"
     var provider: AgentProvider = .claude
     var cwd: String
