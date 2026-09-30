@@ -2,7 +2,7 @@
 import Foundation
 
 struct Session: Identifiable, Equatable {
-    let id: String                  // session_id from the agent CLI; Codex ids arrive namespaced "codex:<uuid>"
+    let id: String                  // session_id from the agent CLI; Codex/pi ids arrive namespaced "codex:<uuid>"/"pi:<uuid>"
     var provider: AgentProvider = .claude
     var cwd: String
     var tty: String

@@ -15,6 +15,11 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(managedCodexDirectoryPaths, forKey: Self.codexDirsKey) }
     }
 
+    /// pi agent directories (e.g. ~/.pi/agent) whose extensions/ folder Claude Monitor manages.
+    @Published var managedPiDirectoryPaths: [String] {
+        didSet { defaults.set(managedPiDirectoryPaths, forKey: Self.piDirsKey) }
+    }
+
     /// When true (default), tiles and menu rows are labeled with their agent
     /// provider — but only while `multipleProvidersConfigured` (a single-agent
     /// setup needs no labels).
@@ -24,7 +29,8 @@ final class Preferences: ObservableObject {
 
     /// True when directories for more than one agent provider are managed.
     var multipleProvidersConfigured: Bool {
-        !managedConfigDirectoryPaths.isEmpty && !managedCodexDirectoryPaths.isEmpty
+        [managedConfigDirectoryPaths, managedCodexDirectoryPaths, managedPiDirectoryPaths]
+            .filter { !$0.isEmpty }.count > 1
     }
 
     /// Dashboard tile size preset.
@@ -187,6 +193,7 @@ final class Preferences: ObservableObject {
 
     private static let configDirsKey        = "managedConfigDirectories"
     private static let codexDirsKey         = "managedCodexDirectories"
+    private static let piDirsKey            = "managedPiDirectories"
     private static let showProviderBadgesKey = "showProviderBadges"
     private static let onboardedKey         = "onboarded"
     private static let tileSizeKey          = "tileSize"
@@ -227,6 +234,7 @@ final class Preferences: ObservableObject {
         self.defaults = defaults
         self.managedConfigDirectoryPaths = defaults.stringArray(forKey: Self.configDirsKey) ?? []
         self.managedCodexDirectoryPaths = defaults.stringArray(forKey: Self.codexDirsKey) ?? []
+        self.managedPiDirectoryPaths = defaults.stringArray(forKey: Self.piDirsKey) ?? []
         // Missing key defaults to true — badges appear as soon as a second provider is configured.
         self.showProviderBadges = (defaults.object(forKey: Self.showProviderBadgesKey) as? Bool) ?? true
         self.disabledTerminalBundleIDs = Set(defaults.stringArray(forKey: Self.disabledTerminalsKey) ?? [])

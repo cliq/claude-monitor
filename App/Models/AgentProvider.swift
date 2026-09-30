@@ -7,11 +7,13 @@ import Foundation
 enum AgentProvider: String, Codable, Equatable {
     case claude
     case codex
+    case pi
 
     var displayName: String {
         switch self {
         case .claude: return "Claude"
         case .codex:  return "Codex"
+        case .pi:     return "Pi"
         }
     }
 }

@@ -75,4 +75,18 @@ final class PreferencesTests: XCTestCase {
         prefs.managedCodexDirectoryPaths = ["/Users/x/.codex"]
         XCTAssertTrue(prefs.multipleProvidersConfigured)
     }
+
+    func test_multipleProvidersConfigured_countsPi() {
+        let prefs = Preferences(defaults: defaults)
+        prefs.managedPiDirectoryPaths = ["/Users/x/.pi/agent"]
+        XCTAssertFalse(prefs.multipleProvidersConfigured)
+
+        prefs.managedCodexDirectoryPaths = ["/Users/x/.codex"]
+        XCTAssertTrue(prefs.multipleProvidersConfigured)
+    }
+
+    func test_managedPiDirectoriesPersist() {
+        Preferences(defaults: defaults).managedPiDirectoryPaths = ["/Users/x/.pi/agent"]
+        XCTAssertEqual(Preferences(defaults: defaults).managedPiDirectoryPaths, ["/Users/x/.pi/agent"])
+    }
 }

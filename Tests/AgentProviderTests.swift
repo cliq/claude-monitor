@@ -26,6 +26,18 @@ final class AgentProviderTests: XCTestCase {
         XCTAssertEqual(event.sessionId, "codex:x")
     }
 
+    func test_eventWithPiProviderDecodes() throws {
+        let json = """
+        {"hook":"Notification","provider":"pi","session_id":"pi:x","tty":"/dev/ttys002","pid":42,"cwd":"/p","ts":1,
+         "notification_type":"permission_prompt","message":"Allow bash?"}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertEqual(event.provider, .pi)
+        XCTAssertEqual(event.provider.displayName, "Pi")
+        XCTAssertEqual(event.sessionId, "pi:x")
+    }
+
     // MARK: Session creation
 
     func test_sessionStoreCarriesProviderOntoNewSessions() {

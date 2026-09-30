@@ -39,4 +39,19 @@ final class ConfigDirectoryDiscoveryTests: XCTestCase {
         let found = ConfigDirectoryDiscovery.scan(home: home)
         XCTAssertEqual(found, [])
     }
+
+    func test_scanPiFindsAgentDirectoryWithConfig() throws {
+        let agent = home.appendingPathComponent(".pi/agent")
+        try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanPi(home: home), [],
+                       "an empty agent dir is not a pi install")
+
+        try "{}".write(to: agent.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanPi(home: home).map(\.lastPathComponent), ["agent"])
+        XCTAssertFalse(ConfigDirectoryDiscovery.scan(home: home).contains { $0.path.contains(".pi") })
+    }
+
+    func test_scanPiReturnsEmptyWithoutPi() {
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanPi(home: home), [])
+    }
 }

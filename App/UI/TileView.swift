@@ -7,7 +7,7 @@ struct TileView: View {
     let metrics: TileMetrics
     let palette: Palette
     /// On when badges are enabled AND more than one provider is configured —
-    /// then every tile is labeled (Claude and Codex alike), otherwise none are.
+    /// then every tile is labeled (Claude, Codex and pi alike), otherwise none are.
     var showProviderBadge: Bool = false
 
     var body: some View {

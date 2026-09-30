@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session (and, since the Codex integration, OpenAI Codex CLI sessions) as colored tiles. Each session reports transitions through agent lifecycle hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, Orca, and Chauffeur are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
+`ClaudeMonitor` is a native macOS 14+ SwiftUI app that shows the live state of every local Claude Code CLI session (and, since the Codex and pi integrations, OpenAI Codex CLI and pi coding agent sessions) as colored tiles. Each session reports transitions through agent lifecycle hooks; clicking a tile focuses the hosting terminal tab. Terminal.app, iTerm2, Orca, and Chauffeur are supported; other terminals (Ghostty, WezTerm, VS Code's integrated terminal) are not.
 
 ## Build / test
 
@@ -154,6 +154,28 @@ Both providers report `PostToolUse`, which restores `working` after an answered 
 Codex CLI sessions flow through the same pipeline via `scripts/codex-hook.sh` (installed to `~/.claude-monitor/codex-hook.sh`), which **normalizes** Codex events into the existing closed vocabulary before POSTing: `PermissionRequest` becomes `Notification` with `notification_type=permission_prompt`, so `StateMachine` and `PushNotifier` have zero Codex-specific code. Session IDs are namespaced `codex:<uuid>` in the script (Claude IDs stay raw — no migration), and the payload carries `provider: "codex"`; `HookEvent`/`Session` decode a missing `provider` as `.claude`. The script must never write to stdout (Codex would read JSON from a `PermissionRequest` hook as an allow/deny decision). Its Python `-c` program is shell-single-quoted; use double quotes inside it.
 
 `HookInstaller`'s `codexKind` targets `<configDir>/hooks.json` (marker files `config.toml`/`auth.json` via `ConfigDirectoryDiscovery.scanCodex`; dirs named `.codex`/`.codexwho-*`), keeps entries schema-minimal (no matcher/sidecar keys — ownership is the arg-encoded command tag only), pins `timeout: 3` on `SessionEnd` (Codex kills those hooks after 1s by default, 3s max), and backs up to `hooks.json.claude-monitor.bak` because other tools (Orca) already own `hooks.json.bak`. Foreign entries in `hooks.json` must survive install/uninstall — see `Tests/Fixtures/codex-hooks-with-foreign-entries.json`. After installation Codex requires the user to trust the hooks via `/hooks` (trust is recorded against the hook definition's hash, so changing the command string re-triggers review); the settings UI surfaces this. `scanCodex` is deliberately separate from `scan()` — Claude-only consumers must never see Codex dirs (`UsageAccountConfig.discover()` combines both on purpose, tagging each account with its provider).
+
+### pi support
+
+pi (the `pi` coding agent, https://github.com/earendil-works/pi) has no shell hooks; it loads TypeScript extensions from
+`<agentDir>/extensions/` (default `~/.pi/agent`, overridable with `PI_CODING_AGENT_DIR`, which a GUI app can't see — such
+dirs are added by hand). `scripts/pi-extension.ts` is bundled as a resource and `PiExtensionInstaller` writes it verbatim to
+`<agentDir>/extensions/claude-monitor.ts` — a file the app owns outright, so there's no JSON merging or backup. Ownership and
+schema come from its first line, `// claude-monitor pi-extension v<N>` (`PiExtensionInstaller.currentVersion`); a file
+without that header is `modifiedExternally` and never deleted. On a build change `refreshInstalled` rewrites every copy that
+carries our header, so editing the extension only needs a `CURRENT_PROJECT_VERSION` bump. pi has no trust flow for user
+extensions; open sessions pick changes up on `/reload`.
+
+The extension normalizes pi events into the closed vocabulary, like `codex-hook.sh`: `session_start` → `SessionStart`
+(`source` = pi's reason), `before_agent_start` → `UserPromptSubmit`, `ui_prompt_start` → `Notification`
+(`permission_prompt` for `confirm`, otherwise `elicitation_dialog`), `ui_prompt_end` → `PostToolUse` — both only while a
+run is active (idle prompts come from slash commands the user just typed; reporting them would push twice), `agent_settled` (not `agent_end`, which retries/compaction/follow-ups can outlive) → `Stop`,
+`session_shutdown` → `SessionEnd`. `reload` start/shutdown pairs are ignored so `/reload` doesn't reset the tile. Only
+`ctx.mode === "tui"` sessions report (subagents run `pi --mode json -p`). Session ids are `pi:<id>`, `pid` is the pi node
+process itself (so `kill(pid, 0)` and the Orca/Chauffeur `ps eww` lookups work), and `tty` comes from `ps -o tty=`. It runs
+inside pi's TUI, so it must never write to stdout/stderr or throw. It imports nothing from the pi package (structural
+types only), so Node's own type stripping can load it: `PiExtensionScriptTests` runs it under `node` against a fake
+`ExtensionAPI` and a real `EventServer` (skipped without node). pi has no usage monitoring.
 
 ### Hook schema versioning
 

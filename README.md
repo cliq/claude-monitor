@@ -4,7 +4,7 @@
 
 # Claude Monitor
 
-A native macOS menu-bar app that shows the live state of every Claude Code and OpenAI Codex CLI session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
+A native macOS menu-bar app that shows the live state of every Claude Code, OpenAI Codex CLI and pi coding agent session on your machine as a small grid of colored tiles. Leave it on your aux display and glance over when something needs you.
 
 Each tile represents one session and is one of five states:
 
@@ -35,6 +35,8 @@ Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 Only hook entries tagged with `--managed-by=claude-monitor` in the command are touched by the installer; your own hooks are left alone, and a rolling `settings.json.bak` is kept before every write.
 
 Codex sessions work the same way: the app installs a second hook script into each Codex directory's `hooks.json`. After installing, run `/hooks` inside Codex once to trust the new entries — Codex will not run them until you do.
+
+pi sessions report through a small extension the app writes to `~/.pi/agent/extensions/claude-monitor.ts`. New pi sessions pick it up automatically; run `/reload` in sessions that were already open. pi has no built-in permission prompts, so a pi tile only turns "needs you" when an extension asks you something mid-run. Usage limits aren't tracked for pi.
 
 ## Multiple configurations
 
@@ -89,7 +91,7 @@ make monitor      # serial console at 115200 baud
 
 - macOS 14 or later
 - [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac), [iTerm2](https://iterm2.com), [Orca](https://onorca.dev), or [Chauffeur](https://github.com/cliq/chauffeur)
-- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) and/or [OpenAI Codex CLI](https://developers.openai.com/codex/cli/)
+- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), [OpenAI Codex CLI](https://developers.openai.com/codex/cli/) and/or [pi](https://github.com/earendil-works/pi)
 
 ## Install
 
@@ -113,7 +115,7 @@ On first launch, the app asks which of your Claude config directories (`~/.claud
 
 ## Uninstalling
 
-1. In the app, go to Settings and click **Uninstall** next to each managed directory. This removes the hook entries from its `settings.json` (Claude) or `hooks.json` (Codex).
+1. In the app, go to Settings and click **Uninstall** next to each managed directory. This removes the hook entries from its `settings.json` (Claude) or `hooks.json` (Codex), or deletes `extensions/claude-monitor.ts` (pi).
 2. Quit the app.
 3. Remove `~/.claude-monitor/` to clean up the runtime files.
 4. Remove `/Applications/ClaudeMonitor.app`.

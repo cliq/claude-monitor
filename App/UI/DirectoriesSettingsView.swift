@@ -6,6 +6,7 @@ struct DirectoriesSettingsView: View {
     @ObservedObject var preferences: Preferences
     @State private var directoriesWithStatus: [ManagedConfigDirectory] = []
     @State private var codexDirectoriesWithStatus: [ManagedConfigDirectory] = []
+    @State private var piDirectoriesWithStatus: [ManagedConfigDirectory] = []
     @State private var errorMessage: String?
 
     var body: some View {
@@ -17,6 +18,7 @@ struct DirectoriesSettingsView: View {
         }
         .onAppear {
             autoDetectCodexIfEmpty()
+            autoDetectPiIfEmpty()
             refresh()
         }
     }
@@ -56,6 +58,25 @@ struct DirectoriesSettingsView: View {
             HStack {
                 Button("Add Codex Directory…") { addCodexDirectory() }
                 Button("Redetect Codex") { redetectCodex() }
+                Spacer()
+            }
+
+            Divider()
+
+            Text("Managed pi agent directories").font(.headline)
+            Text("pi sessions report through an extension written to each directory's extensions/claude-monitor.ts. Open pi sessions pick it up after /reload or a restart.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            directoryList(piDirectoriesWithStatus,
+                          emptyLabel: "No pi directories in the list — use Redetect pi or Add pi Directory.",
+                          install: { installPi($0.url) },
+                          uninstall: { uninstallPi($0) },
+                          remove: { removePi($0) })
+
+            HStack {
+                Button("Add pi Directory…") { addPiDirectory() }
+                Button("Redetect pi") { redetectPi() }
                 Spacer()
             }
 
@@ -139,6 +160,14 @@ struct DirectoriesSettingsView: View {
             .map { url in
                 let status = (try? HookInstaller.inspectCodexHook(configDir: url))
                     ?? HookInstaller.Status(status: .notInstalled, installedVersion: 0)
+                return ManagedConfigDirectory(url: url,
+                                              status: status.status,
+                                              installedVersion: status.installedVersion)
+            }
+        piDirectoriesWithStatus = preferences.managedPiDirectoryPaths
+            .map(URL.init(fileURLWithPath:))
+            .map { url in
+                let status = PiExtensionInstaller.inspect(agentDir: url)
                 return ManagedConfigDirectory(url: url,
                                               status: status.status,
                                               installedVersion: status.installedVersion)
@@ -318,12 +347,97 @@ struct DirectoriesSettingsView: View {
         refresh()
     }
 
+    // MARK: pi directories
+
+    /// Same first-visit seeding as the Codex list.
+    private func autoDetectPiIfEmpty() {
+        guard preferences.managedPiDirectoryPaths.isEmpty else { return }
+        let discovered = ConfigDirectoryDiscovery.scanPi().map(\.path)
+        guard !discovered.isEmpty else { return }
+        preferences.managedPiDirectoryPaths = discovered
+    }
+
+    private func installPi(_ dir: URL) {
+        do {
+            try PiExtensionInstaller.install(agentDir: dir)
+            refresh()
+            let alert = NSAlert()
+            alert.messageText = "pi extension installed"
+            alert.informativeText = """
+            Wrote: \(PiExtensionInstaller.extensionFile(in: dir).path)
+
+            New pi sessions report automatically. Run /reload in pi sessions that are already open.
+            """
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func uninstallPi(_ entry: ManagedConfigDirectory) {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall the pi extension from \(entry.url.path)?"
+        alert.informativeText = "extensions/\(PiExtensionInstaller.fileName) will be deleted. Open pi sessions keep reporting until /reload or a restart. The directory stays in the list and can be reinstalled later."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try PiExtensionInstaller.uninstall(agentDir: entry.url)
+            refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func removePi(_ entry: ManagedConfigDirectory) {
+        if entry.status != .notInstalled {
+            guard confirmRemove(entry, installedItem: "extensions/\(PiExtensionInstaller.fileName)") else { return }
+        }
+        preferences.managedPiDirectoryPaths.removeAll { $0 == entry.url.path }
+        refresh()
+    }
+
+    private func addPiDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true   // ~/.pi starts with `.`
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if !preferences.managedPiDirectoryPaths.contains(url.path) {
+            preferences.managedPiDirectoryPaths.append(url.path)
+        }
+        refresh()
+    }
+
+    private func redetectPi() {
+        let discovered = ConfigDirectoryDiscovery.scanPi().map(\.path)
+        let currentSet = Set(preferences.managedPiDirectoryPaths)
+        let added = discovered.filter { !currentSet.contains($0) }
+        guard !added.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "No new pi directories found."
+            alert.informativeText = "Looked for ~/.pi/agent containing a settings.json, auth.json or models.json. Use Add pi Directory for a custom PI_CODING_AGENT_DIR."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+        preferences.managedPiDirectoryPaths.append(contentsOf: added)
+        refresh()
+    }
+
     // MARK: Shared helpers
 
     private func confirmRemove(_ entry: ManagedConfigDirectory, hooksFileName: String) -> Bool {
+        confirmRemove(entry, installedItem: "hook in its \(hooksFileName)")
+    }
+
+    private func confirmRemove(_ entry: ManagedConfigDirectory, installedItem: String) -> Bool {
         let alert = NSAlert()
         alert.messageText = "Remove \(entry.url.lastPathComponent) from the list?"
-        alert.informativeText = "This only removes the directory from Claude Monitor's list. The installed hook in its \(hooksFileName) is left in place — use Uninstall first if you want that gone too."
+        alert.informativeText = "This only removes the directory from Claude Monitor's list. The installed \(installedItem) is left in place — use Uninstall first if you want that gone too."
         alert.addButton(withTitle: "Remove")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn

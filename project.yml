@@ -52,6 +52,8 @@ targets:
         buildPhase: resources
       - path: scripts/codex-hook.sh
         buildPhase: resources
+      - path: scripts/pi-extension.ts
+        buildPhase: resources
       - path: scripts/offline-prowl.sh.template
         buildPhase: resources
     info:
@@ -94,6 +96,8 @@ targets:
       - path: scripts/hook.sh
         buildPhase: resources
       - path: scripts/codex-hook.sh
+        buildPhase: resources
+      - path: scripts/pi-extension.ts
         buildPhase: resources
       - path: scripts/offline-prowl.sh.template
         buildPhase: resources

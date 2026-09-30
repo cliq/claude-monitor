@@ -98,6 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     install: { try HookInstaller.installCodexHook(configDir: $0) }
                 ).count
             }
+            // The pi extension is a file we own outright, so every installed copy is
+            // rewritten on update rather than only outdated ones.
+            refreshed += PiExtensionInstaller.refreshInstalled(
+                agentDirs: preferences.managedPiDirectoryPaths.map { URL(fileURLWithPath: $0) }
+            ).count
             if refreshed > 0 {
                 NSLog("HookMaintenance: refreshed \(refreshed) outdated managed hook entr(ies) after update to build \(build)")
             }

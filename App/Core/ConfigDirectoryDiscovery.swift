@@ -17,6 +17,15 @@ enum ConfigDirectoryDiscovery {
              markerFiles: ["config.toml", "auth.json"])
     }
 
+    /// Returns pi's agent directory (`~/.pi/agent`) when it exists and holds any of
+    /// pi's config files. A custom `PI_CODING_AGENT_DIR` is invisible to a GUI app,
+    /// so such directories are added by hand. Kept separate from `scan()` like
+    /// `scanCodex()`.
+    static func scanPi(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        scan(home: home.appendingPathComponent(".pi"), names: { $0 == "agent" },
+             markerFiles: ["settings.json", "auth.json", "models.json"])
+    }
+
     private static func scan(home: URL, names: (String) -> Bool, markerFiles: [String]) -> [URL] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(atPath: home.path) else { return [] }
