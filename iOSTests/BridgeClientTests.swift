@@ -62,4 +62,47 @@ final class BridgeEndpointTests: XCTestCase {
         store.endpoint = .bonjour(name: "Studio")
         XCTAssertEqual(UsageStore(defaults: defaults, reloadWidgets: {}).endpoint, .bonjour(name: "Studio"))
     }
+
+    @MainActor
+    func test_widgetAccountPersistsAndClearsOnMacChange() {
+        let defaults = UserDefaults(suiteName: "WidgetAccountTests")!
+        defaults.removePersistentDomain(forName: "WidgetAccountTests")
+        defer { defaults.removePersistentDomain(forName: "WidgetAccountTests") }
+
+        var reloads = 0
+        let store = UsageStore(defaults: defaults, reloadWidgets: { reloads += 1 })
+        store.endpoint = .bonjour(name: "Studio")
+        reloads = 0
+        store.widgetAccountID = "codex:work"
+        XCTAssertEqual(reloads, 1)
+        XCTAssertEqual(WidgetAccountStore.load(from: defaults), "codex:work")
+        XCTAssertEqual(UsageStore(defaults: defaults, reloadWidgets: {}).widgetAccountID, "codex:work")
+
+        store.endpoint = .bonjour(name: "Laptop")
+        XCTAssertNil(store.widgetAccountID)
+        XCTAssertNil(WidgetAccountStore.load(from: defaults))
+    }
+}
+
+final class WidgetAccountStoreTests: XCTestCase {
+    private let snapshot = UsageSnapshot(updatedAt: "2026-07-19T12:00:00Z", accounts: [
+        AccountUsage(name: "work", status: "ok"),
+        AccountUsage(provider: .codex, name: "work", status: "ok"),
+    ])
+
+    func test_pathReadsEveryAccountOnlyWhenOneIsPicked() {
+        XCTAssertEqual(WidgetAccountStore.path(for: nil), "/usage")
+        XCTAssertEqual(WidgetAccountStore.path(for: "claude:work"), "/panel")
+    }
+
+    func test_filterKeepsOnlyThePickedAccount() {
+        let filtered = WidgetAccountStore.filter(snapshot, to: "codex:work")
+        XCTAssertEqual(filtered.accounts.map(\.id), ["codex:work"])
+        XCTAssertEqual(filtered.updatedAt, snapshot.updatedAt)
+    }
+
+    func test_filterLeavesSnapshotAloneWithoutAPickOrAMatch() {
+        XCTAssertEqual(WidgetAccountStore.filter(snapshot, to: nil).accounts, snapshot.accounts)
+        XCTAssertEqual(WidgetAccountStore.filter(snapshot, to: "claude:gone").accounts, snapshot.accounts)
+    }
 }

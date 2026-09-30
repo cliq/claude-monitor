@@ -76,3 +76,42 @@ enum BridgeEndpointStore {
         }
     }
 }
+
+/// The one account the Home Screen widget shows, picked in the app from the
+/// accounts it lists (`/panel`). Nil keeps the Mac's "Widget · ESP32"
+/// selection (`/usage`). Stored as `AccountUsage.id` — provider-qualified,
+/// so same-named Claude and Codex accounts don't collide.
+enum WidgetAccountStore {
+    static let key = "widgetAccountID"
+
+    static func load(from defaults: UserDefaults = BridgeEndpointStore.sharedDefaults) -> String? {
+        defaults.string(forKey: key)
+    }
+
+    static func save(_ id: String?, to defaults: UserDefaults = BridgeEndpointStore.sharedDefaults) {
+        if let id {
+            defaults.set(id, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    /// The bridge path the widget reads: every account when one is picked
+    /// (it may not be checked for external displays on the Mac), otherwise
+    /// the Mac's own selection.
+    static func path(for id: String?) -> String {
+        id == nil ? "/usage" : "/panel"
+    }
+
+    /// `snapshot` narrowed to the picked account. Unchanged when nothing is
+    /// picked, or when the account is gone from the Mac (renamed/removed) —
+    /// every account beats an empty widget.
+    static func filter(_ snapshot: UsageSnapshot, to id: String?) -> UsageSnapshot {
+        guard let id else { return snapshot }
+        let picked = snapshot.accounts.filter { $0.id == id }
+        guard !picked.isEmpty else { return snapshot }
+        var filtered = snapshot
+        filtered.accounts = picked
+        return filtered
+    }
+}

@@ -33,6 +33,9 @@ struct MobileUsageView: View {
                     .accessibilityLabel(compact ? "Regular layout" : "Compact layout")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    widgetAccountMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingPicker = true
                     } label: {
@@ -49,6 +52,33 @@ struct MobileUsageView: View {
         .onAppear {
             if store.endpoint == nil { showingPicker = true }
         }
+    }
+
+    /// Picks the one account the Home Screen widget shows, from the accounts
+    /// listed here. "Mac's selection" keeps the accounts checked under
+    /// "Widget · ESP32" on the Mac.
+    private var widgetAccountMenu: some View {
+        let accounts = store.snapshot?.accounts ?? []
+        return Menu {
+            Section("Home Screen widget") {
+                Picker("Widget account", selection: $store.widgetAccountID) {
+                    Text("Mac's selection").tag(String?.none)
+                    ForEach(accounts) { account in
+                        Text("\(account.name) · \(account.provider.displayName)").tag(Optional(account.id))
+                    }
+                    // Keep a pick the Mac no longer reports visible (the
+                    // widget shows every account meanwhile).
+                    if let id = store.widgetAccountID, !accounts.contains(where: { $0.id == id }) {
+                        Text("\(id) (unavailable)").tag(Optional(id))
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+        } label: {
+            Image(systemName: "square.grid.2x2")
+        }
+        .disabled(accounts.isEmpty && store.widgetAccountID == nil)
+        .accessibilityLabel("Widget account")
     }
 
     @ViewBuilder

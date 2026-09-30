@@ -125,9 +125,12 @@ Simulator,id=<udid>'` runs its tests.
 `ClaudeMonitorMobileWidget` (sources in `iOSWidget/`) is the Home Screen widget. It reuses the Mac widget's
 `UsageWidgetView`/`UsageEntry` (`Widget/`), but since the iOS app only runs in the foreground, its timeline provider fetches
 `/usage` (the Mac's "Widget · ESP32" selection) from the Mac itself on each reload and caches the last good snapshot with
-`UsageSnapshotStore` for when the Mac is unreachable. The selected Mac is shared through `BridgeEndpointStore` in the App
-Group's defaults. The iOS group is `IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)` — not team-prefixed like the Mac one;
-automatic signing registers it. The app only calls `reloadTimelines` when the Mac's `updated_at` changes.
+`UsageSnapshotStore` for when the Mac is unreachable. The app's toolbar widget menu can instead pin the widget to one of the
+accounts the app lists (`WidgetAccountStore`, keyed by the provider-qualified `AccountUsage.id`, cleared when the Mac
+changes): the widget then reads `/panel` and filters to it after the cache read, falling back to every account if the Mac
+no longer reports it. The selected Mac is shared through `BridgeEndpointStore` in the App Group's defaults. The iOS group
+is `IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)` — not team-prefixed like the Mac one; automatic signing registers it.
+The app only calls `reloadTimelines` when the Mac's `updated_at` changes, or the Mac or widget account is changed.
 
 ### Update checks
 

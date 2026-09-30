@@ -15,10 +15,22 @@ final class UsageStore: ObservableObject {
         didSet {
             guard endpoint != oldValue else { return }
             BridgeEndpointStore.save(endpoint, to: defaults)
+            // Account ids from another Mac mean nothing here.
+            widgetAccountID = nil
             snapshot = nil
             errorMessage = nil
             reloadWidget()
             Task { await refresh() }
+        }
+    }
+
+    /// The account the Home Screen widget shows (`AccountUsage.id`); nil
+    /// keeps the Mac's "Widget · ESP32" selection.
+    @Published var widgetAccountID: String? {
+        didSet {
+            guard widgetAccountID != oldValue else { return }
+            WidgetAccountStore.save(widgetAccountID, to: defaults)
+            reloadWidget()
         }
     }
 
@@ -40,6 +52,7 @@ final class UsageStore: ObservableObject {
             BridgeEndpointStore.save(legacy, to: defaults)
         }
         self.endpoint = BridgeEndpointStore.load(from: defaults)
+        self.widgetAccountID = WidgetAccountStore.load(from: defaults)
     }
 
     /// When the Mac last polled usage (not when the phone last fetched).
