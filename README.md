@@ -32,6 +32,8 @@ Clicking a tile brings its Terminal.app, iTerm2, [Orca](https://onorca.dev), or 
 
 Hook failures always exit 0 — if the app is not running, Claude is unaffected.
 
+Restarting or updating the app keeps your tiles: the dashboard is saved to `~/.claude-monitor/sessions.json` and restored at launch for every session whose process is still running, with its state and timer intact. Claude sessions are also rebuilt from Claude Code's own session records, so they reappear even after the app was closed for a while.
+
 Only hook entries tagged with `--managed-by=claude-monitor` in the command are touched by the installer; your own hooks are left alone, and a rolling `settings.json.bak` is kept before every write.
 
 Codex sessions work the same way: the app installs a second hook script into each Codex directory's `hooks.json`. After installing, run `/hooks` inside Codex once to trust the new entries — Codex will not run them until you do.
