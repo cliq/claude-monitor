@@ -22,6 +22,8 @@ Each tile represents one session and is one of five states:
 
 Clicking a tile brings its Terminal.app, iTerm2, [Orca](https://onorca.dev), or [Chauffeur](https://github.com/cliq/chauffeur) session to the front.
 
+The dashboard and the usage panel float above other windows by default; turn off **Keep dashboard and usage panel above other windows** in Settings → Appearance to let other windows cover them.
+
 ## How it works
 
 1. The app writes a hook script to `~/.claude-monitor/hook.sh` and registers it for six Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `Notification`, `SessionEnd`) in the selected `settings.json` files.
@@ -68,7 +70,7 @@ The same data is served on your LAN as flat JSON (`GET http://<mac>:8737/usage`,
 
 ## iPhone app (optional)
 
-`iOS/` holds an iPhone/iPad app (scheme `ClaudeMonitorMobile`) that shows the same usage panel, read from the Mac over your LAN. With **Serve usage to external displays** on, the Mac advertises itself over Bonjour and the app lists it under *Choose Mac*; you can also type the Mac's address. The phone shows every polled account, not just the Widget · ESP32 selection. Its Home Screen widget (small, medium, large) shows the Widget · ESP32 selection, fetching from the Mac on WidgetKit's refresh schedule and falling back to the last snapshot when you're away from home.
+`iOS/` holds an iPhone/iPad app (scheme `ClaudeMonitorMobile`) that shows the same usage panel, read from the Mac over your LAN. With **Serve usage to external displays** on, the Mac advertises itself over Bonjour and the app lists it under *Choose Mac*; you can also type the Mac's address. The phone shows every polled account, not just the Widget · ESP32 selection. Its Home Screen widget (small, medium, large) shows the Widget · ESP32 selection, fetching from the Mac on WidgetKit's refresh schedule and falling back to the last snapshot when you're away from home. The widget can also be pinned to one account from the app's toolbar, and its up/down arrows step through every account the app lists.
 
 ## ESP32 desk panel (optional)
 
