@@ -16,7 +16,7 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
 
             AppearanceSettingsView(preferences: preferences)
-                .frame(width: 560, height: 400)
+                .frame(width: 560, height: 480)
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
 
             TerminalsSettingsView(preferences: preferences)

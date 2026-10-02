@@ -1,5 +1,6 @@
 // App/UI/UsagePanelWindow.swift
 import AppKit
+import Combine
 import SwiftUI
 
 /// Small titled window hosting `UsagePanelView`. Unlike the borderless
@@ -13,6 +14,7 @@ final class UsagePanelWindow {
     private let window: NSPanel
     private let preferences: Preferences
     private var closeObserver: NSObjectProtocol?
+    private var levelSubscription: AnyCancellable?
     private var frameObservers: [NSObjectProtocol] = []
     private var workspaceObservers: [NSObjectProtocol] = []
     private var needsFrameRestore = true
@@ -33,7 +35,8 @@ final class UsagePanelWindow {
                             backing: .buffered, defer: false)
         panel.title = "Claude Usage"
         panel.isReleasedWhenClosed = false
-        panel.isFloatingPanel = true
+        // `isFloatingPanel` toggles the level between `.floating` and `.normal`.
+        panel.isFloatingPanel = preferences.windowsFloatOnTop
         panel.becomesKeyOnlyIfNeeded = true
         // Utility panels hide whenever the app deactivates; the panel should
         // stay on screen like the dashboard for as long as the menu toggle is
@@ -46,6 +49,9 @@ final class UsagePanelWindow {
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: panel, queue: .main
         ) { _ in onUserClose() }
+        levelSubscription = preferences.$windowsFloatOnTop
+            .removeDuplicates()
+            .sink { [weak panel] floats in panel?.isFloatingPanel = floats }
         observeFrameChanges()
         observeScreenChanges()
     }

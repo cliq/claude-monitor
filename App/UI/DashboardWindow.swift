@@ -7,6 +7,7 @@ final class DashboardWindow {
     private let window: BorderlessFloatingWindow
     private let preferences: Preferences
     private var subscription: AnyCancellable?
+    private var levelSubscription: AnyCancellable?
     private var frameObservers: [NSObjectProtocol] = []
     private var workspaceObservers: [NSObjectProtocol] = []
 
@@ -38,7 +39,7 @@ final class DashboardWindow {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.level = .floating
+        window.level = preferences.windowsFloatOnTop ? .floating : .normal
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
@@ -76,6 +77,11 @@ final class DashboardWindow {
         .sink { [weak self] count, size in
             self?.resize(count: count, metrics: TileMetrics.resolve(size))
         }
+        levelSubscription = preferences.$windowsFloatOnTop
+            .removeDuplicates()
+            .sink { [weak window] floats in
+                window?.level = floats ? .floating : .normal
+            }
     }
 
     deinit {

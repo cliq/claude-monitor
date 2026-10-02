@@ -9,6 +9,7 @@ struct AppearanceSettingsView: View {
             sizeSection
             paletteSection
             badgeSection
+            windowSection
             Spacer(minLength: 0)
         }
         .padding(20)
@@ -21,6 +22,18 @@ struct AppearanceSettingsView: View {
             Text("Agent badges").font(.headline)
             Toggle("Label sessions with their agent", isOn: $preferences.showProviderBadges)
             Text("Tiles and menu rows get a Claude or Codex label. Only shown while directories for more than one agent are configured.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Window level
+
+    private var windowSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Windows").font(.headline)
+            Toggle("Keep dashboard and usage panel above other windows", isOn: $preferences.windowsFloatOnTop)
+            Text("When off, other apps' windows can cover them like any normal window.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

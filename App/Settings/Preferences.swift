@@ -54,6 +54,13 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(showDashboardWindow, forKey: Self.showWindowKey) }
     }
 
+    /// When true (default), the dashboard and the usage panel float above
+    /// other apps' windows. When false they sit at the normal window level and
+    /// can be covered like any other window.
+    @Published var windowsFloatOnTop: Bool {
+        didSet { defaults.set(windowsFloatOnTop, forKey: Self.windowsFloatOnTopKey) }
+    }
+
     /// Master toggle for Prowl push notifications.
     @Published var prowlEnabled: Bool {
         didSet { defaults.set(prowlEnabled, forKey: Self.prowlEnabledKey) }
@@ -205,6 +212,7 @@ final class Preferences: ObservableObject {
     /// as a seed so upgrading keeps the position the user already chose.
     static let legacyUsagePanelAutosaveKey  = "NSWindow Frame UsagePanelWindow"
     private static let showWindowKey        = "showDashboardWindow"
+    private static let windowsFloatOnTopKey = "windowsFloatOnTop"
     private static let prowlEnabledKey      = "prowlEnabled"
     private static let prowlOfflineKey      = "prowlOfflineHookEnabled"
     private static let lastHookRefreshBuildKey = "lastHookRefreshBuild"
@@ -260,6 +268,8 @@ final class Preferences: ObservableObject {
         // defaults to `true` rather than `false` — preserving the historical
         // "window is visible" behavior for upgrading users.
         self.showDashboardWindow = (defaults.object(forKey: Self.showWindowKey) as? Bool) ?? true
+        // Missing key defaults to true — both windows have always floated.
+        self.windowsFloatOnTop = (defaults.object(forKey: Self.windowsFloatOnTopKey) as? Bool) ?? true
 
         // Missing key defaults to true — update checks are on unless opted out.
         self.updateCheckEnabled = (defaults.object(forKey: Self.updateCheckKey) as? Bool) ?? true

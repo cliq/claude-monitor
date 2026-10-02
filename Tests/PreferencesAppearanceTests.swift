@@ -50,4 +50,14 @@ final class PreferencesAppearanceTests: XCTestCase {
         let prefs = Preferences(defaults: defaults)
         XCTAssertEqual(prefs.paletteID, .vibrant)
     }
+
+    func test_windowsFloatOnTopDefaultsToTrueAndRoundTrips() {
+        let defaults = makeDefaults()
+        let a = Preferences(defaults: defaults)
+        XCTAssertTrue(a.windowsFloatOnTop)
+        a.windowsFloatOnTop = false
+
+        let b = Preferences(defaults: defaults)
+        XCTAssertFalse(b.windowsFloatOnTop)
+    }
 }
