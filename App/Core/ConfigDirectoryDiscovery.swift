@@ -26,6 +26,21 @@ enum ConfigDirectoryDiscovery {
              markerFiles: ["settings.json", "auth.json", "models.json"])
     }
 
+    /// Returns Kimi Code CLI's home (`~/.kimi-code`) when it holds a config or
+    /// stored OAuth credentials. A custom `KIMI_CODE_HOME` is invisible to a GUI
+    /// app. Usage-only, kept separate from `scan()` like `scanCodex()`.
+    static func scanKimi(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        scan(home: home, names: { $0 == ".kimi-code" },
+             markerFiles: ["credentials", "config.toml"])
+    }
+
+    /// Returns ZCode's data directory (`~/.zcode`) when it holds the desktop app's
+    /// credential store. Usage-only, kept separate from `scan()` like `scanCodex()`.
+    static func scanZCode(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        scan(home: home, names: { $0 == ".zcode" },
+             markerFiles: ["v2/credentials.json"])
+    }
+
     private static func scan(home: URL, names: (String) -> Bool, markerFiles: [String]) -> [URL] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(atPath: home.path) else { return [] }

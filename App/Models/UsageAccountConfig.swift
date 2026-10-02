@@ -30,8 +30,9 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
     }
 
     /// `.claudewho-personal` → "personal", `.claude` → "claude",
-    /// `.codexwho-work` → "work", `.codex` → "codex".
+    /// `.codexwho-work` → "work", `.codex` → "codex", `.kimi-code` → "kimi".
     static func accountName(forDirectoryNamed dirName: String) -> String {
+        if dirName == ".kimi-code" { return "kimi" }
         for (prefix, fallback) in [(".claudewho-", "claude"), (".codexwho-", "codex")] {
             if dirName.hasPrefix(prefix) {
                 let suffix = String(dirName.dropFirst(prefix.count))
@@ -52,7 +53,17 @@ struct UsageAccountConfig: Identifiable, Equatable, Sendable {
                                name: accountName(forDirectoryNamed: dir.lastPathComponent),
                                configDir: dir.path)
         }
-        return claude + codex
+        let kimi = ConfigDirectoryDiscovery.scanKimi(home: home).map { dir in
+            UsageAccountConfig(provider: .kimi,
+                               name: accountName(forDirectoryNamed: dir.lastPathComponent),
+                               configDir: dir.path)
+        }
+        let zcode = ConfigDirectoryDiscovery.scanZCode(home: home).map { dir in
+            UsageAccountConfig(provider: .zcode,
+                               name: accountName(forDirectoryNamed: dir.lastPathComponent),
+                               configDir: dir.path)
+        }
+        return claude + codex + kimi + zcode
     }
 
     /// Discovered accounts in the user's preferred order: dirs present in

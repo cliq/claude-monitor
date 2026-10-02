@@ -23,7 +23,7 @@ struct UsageSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Show usage limits", isOn: $preferences.usageMonitorEnabled)
                     .font(.headline)
-                Text("Polls each enabled account every 3 minutes. Claude Code accounts use Anthropic's usage endpoint with the OAuth credentials Claude Code keeps in the Keychain — refreshed tokens are written back, so Claude Code stays logged in. Codex accounts are read through the Codex CLI's local app-server; their credentials are never read. Codex usage requires a ChatGPT sign-in (API-key logins are billed separately and have no plan limits).")
+                Text("Polls each enabled account every 3 minutes. Claude Code accounts use Anthropic's usage endpoint with the OAuth credentials Claude Code keeps in the Keychain — refreshed tokens are written back, so Claude Code stays logged in. Codex accounts are read through the Codex CLI's local app-server; their credentials are never read. Codex usage requires a ChatGPT sign-in (API-key logins are billed separately and have no plan limits). Kimi Code accounts use the OAuth login the Kimi CLI keeps in ~/.kimi-code — its short-lived tokens are refreshed and written back, so Kimi stays logged in. ZCode accounts read the Z.ai Coding Plan key the ZCode app stores in ~/.zcode, read-only.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -58,7 +58,7 @@ struct UsageSettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Accounts").font(.subheadline.weight(.semibold))
             if accounts.isEmpty {
-                Text("No Claude Code or Codex config directories found in your home folder.")
+                Text("No Claude Code, Codex, Kimi Code or ZCode config directories found in your home folder.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {

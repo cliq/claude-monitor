@@ -54,7 +54,7 @@ Get a phone push every time a session needs your attention or finishes via [Prow
 
 ## Usage limits (optional)
 
-Claude Monitor can also show your **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit for every Claude Code account it finds, plus rate-limit windows and monthly spend allowances for OpenAI Codex accounts. Enable it in **Settings → Usage** and pick the accounts you want to track.
+Claude Monitor can also show your **usage limits** — the 5-hour session window, the weekly limit, and the weekly Opus limit for every Claude Code account it finds, plus rate-limit windows and monthly spend allowances for OpenAI Codex accounts, and plan quotas for Kimi Code and ZCode (Z.ai Coding Plan) logins. Enable it in **Settings → Usage** and pick the accounts you want to track.
 
 <p align="center">
   <img src="docs/images/usage-panel.png" alt="Claude Usage panel showing session, weekly, and Fable limits for three accounts" width="440" />
@@ -63,6 +63,10 @@ Claude Monitor can also show your **usage limits** — the 5-hour session window
 For Claude accounts the app reads each account's OAuth token from the Keychain (the same credentials Claude Code stores) and polls `https://api.anthropic.com/api/oauth/usage` every 180 seconds. Refreshed tokens are written back, so tracking an account here keeps it logged in — it never signs you out of Claude Code.
 
 For Codex accounts (`~/.codex` and `~/.codexwho-*`) the app asks the Codex CLI itself via a short-lived `codex app-server` process — it never reads, refreshes, or copies Codex credentials. This requires the `codex` CLI on your machine and a ChatGPT sign-in (API-key logins are billed separately and expose no plan limits).
+
+For Kimi Code (`~/.kimi-code`) the app uses the OAuth login the Kimi Code CLI stores there and shows the 5-hour, weekly (on plans that have one) and monthly limits plus your membership level. Kimi's tokens expire every 15 minutes, so the app refreshes them using the CLI's own file lock and writes them back — Kimi stays logged in, and if a login is rejected the app only tells you to run `kimi login`, it never signs you out.
+
+For ZCode (`~/.zcode`, Z.ai's desktop coding agent) the app decrypts the Z.ai Coding Plan key that ZCode stores and shows the 5-hour and weekly quotas, the monthly tool-call allowance when your plan has one, the plan name with its renewal date, and any unused quota resets you've been granted. It only reads ZCode's files and never uses a reset for you. Only Z.ai individual Coding Plans are supported (not team, start or BigModel plans). Kimi and ZCode sessions don't get dashboard tiles — they only appear in the usage panel.
 
 Toggle **Open Usage Panel** from the menu bar for a live dashboard of all accounts with reset countdowns. If it takes too much room, **Settings → Usage → Compact layout** collapses each account to a single row.
 
@@ -96,6 +100,7 @@ make monitor      # serial console at 115200 baud
 - macOS 14 or later
 - [Terminal.app](https://support.apple.com/guide/terminal/welcome/mac), [iTerm2](https://iterm2.com), [Orca](https://onorca.dev), or [Chauffeur](https://github.com/cliq/chauffeur)
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), [OpenAI Codex CLI](https://developers.openai.com/codex/cli/) and/or [pi](https://github.com/earendil-works/pi)
+- Optional, for usage limits only: [Kimi Code CLI](https://www.kimi.com/code/docs/en/) and/or the ZCode app
 
 ## Install
 

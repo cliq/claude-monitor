@@ -54,4 +54,25 @@ final class ConfigDirectoryDiscoveryTests: XCTestCase {
     func test_scanPiReturnsEmptyWithoutPi() {
         XCTAssertEqual(ConfigDirectoryDiscovery.scanPi(home: home), [])
     }
+
+    func test_scanKimiAndZCodeFindUsageOnlyHomes() throws {
+        let kimi = home.appendingPathComponent(".kimi-code")
+        let zcode = home.appendingPathComponent(".zcode/v2")
+        try FileManager.default.createDirectory(at: kimi, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: zcode, withIntermediateDirectories: true)
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanKimi(home: home), [], "no config or credentials yet")
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanZCode(home: home), [], "no credential store yet")
+
+        try FileManager.default.createDirectory(at: kimi.appendingPathComponent("credentials"),
+                                                withIntermediateDirectories: true)
+        try "{}".write(to: zcode.appendingPathComponent("credentials.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanKimi(home: home).map(\.lastPathComponent), [".kimi-code"])
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanZCode(home: home).map(\.lastPathComponent), [".zcode"])
+        XCTAssertEqual(ConfigDirectoryDiscovery.scan(home: home), [], "Claude consumers never see them")
+        XCTAssertEqual(ConfigDirectoryDiscovery.scanCodex(home: home), [])
+
+        let accounts = UsageAccountConfig.discover(home: home)
+        XCTAssertEqual(accounts.map(\.provider), [.kimi, .zcode])
+        XCTAssertEqual(accounts.map(\.name), ["kimi", "zcode"])
+    }
 }

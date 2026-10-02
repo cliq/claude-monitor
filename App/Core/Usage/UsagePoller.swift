@@ -3,7 +3,8 @@ import CoreGraphics
 
 /// Polls usage for every discovered account — Claude Code via
 /// `ClaudeUsageFetcher` (OAuth endpoint), Codex via `CodexUsageFetcher`
-/// (local app-server) — and watches the Mac's display power state (mirrored
+/// (local app-server), Kimi Code via `KimiUsageFetcher`, ZCode's Z.ai Coding
+/// Plan via `ZCodeUsageFetcher` — and watches the Mac's display power state (mirrored
 /// to the ESP32 panel backlight via `UsageBridgeServer`).
 ///
 /// This class owns the timer, ordered aggregation, `updatedAt`, and the
@@ -46,6 +47,8 @@ final class UsagePoller: ObservableObject {
          fetchers: [AgentProvider: any UsageFetching] = [
             .claude: ClaudeUsageFetcher(),
             .codex: CodexUsageFetcher(),
+            .kimi: KimiUsageFetcher(),
+            .zcode: ZCodeUsageFetcher(),
          ]) {
         self.accountsProvider = accountsProvider
         self.publish = publish
