@@ -173,6 +173,17 @@ private struct UsageAccountBlock: View {
                     .kerning(0.8)
                     .foregroundStyle(UsagePalette.muted)
                     .invalidatableContent()
+                if let resets = account.resetCredits, resets > 0 {
+                    // Unredeemed Codex reset grants; red when one lapses
+                    // within a week, like the usage panel.
+                    Text(resets == 1 ? "1 RESET" : "\(resets) RESETS")
+                        .font(.system(size: 7, weight: .medium))
+                        .kerning(0.8)
+                        .foregroundStyle(UsageFormat.isWithin(days: 7, account.resetCreditsExpireAt, now: now)
+                                         ? UsagePalette.crit : UsagePalette.muted)
+                        .lineLimit(1)
+                        .invalidatableContent()
+                }
                 Spacer()
                 Circle()
                     .fill(account.status == "error" || isStale ? UsagePalette.crit : UsagePalette.okDot)
