@@ -82,6 +82,35 @@ final class BridgeEndpointTests: XCTestCase {
         XCTAssertNil(store.widgetAccountID)
         XCTAssertNil(WidgetAccountStore.load(from: defaults))
     }
+
+    @MainActor
+    func test_startPollingPicksUpAccountChangedByTheWidget() throws {
+        let defaults = UserDefaults(suiteName: "WidgetAccountSyncTests")!
+        defaults.removePersistentDomain(forName: "WidgetAccountSyncTests")
+        defer { defaults.removePersistentDomain(forName: "WidgetAccountSyncTests") }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let store = UsageStore(defaults: defaults, cacheDir: dir, reloadWidgets: {})
+        WidgetAccountStore.save("codex:work", to: defaults)
+        store.startPolling()
+        store.stopPolling()
+        XCTAssertEqual(store.widgetAccountID, "codex:work")
+    }
+
+    @MainActor
+    func test_macChangeClearsThePanelCache() {
+        let defaults = UserDefaults(suiteName: "WidgetPanelCacheTests")!
+        defaults.removePersistentDomain(forName: "WidgetPanelCacheTests")
+        defer { defaults.removePersistentDomain(forName: "WidgetPanelCacheTests") }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let store = UsageStore(defaults: defaults, cacheDir: dir, reloadWidgets: {})
+        WidgetAccountStore.writePanel(UsageSnapshot(updatedAt: nil, accounts: [AccountUsage(name: "a", status: "ok")]), to: dir)
+        store.endpoint = .bonjour(name: "Laptop")
+        XCTAssertNil(WidgetAccountStore.readPanel(from: dir))
+    }
 }
 
 final class WidgetAccountStoreTests: XCTestCase {
@@ -104,5 +133,46 @@ final class WidgetAccountStoreTests: XCTestCase {
     func test_filterLeavesSnapshotAloneWithoutAPickOrAMatch() {
         XCTAssertEqual(WidgetAccountStore.filter(snapshot, to: nil).accounts, snapshot.accounts)
         XCTAssertEqual(WidgetAccountStore.filter(snapshot, to: "claude:gone").accounts, snapshot.accounts)
+    }
+
+    func test_nextStepsFromThePickAndWraps() {
+        let ids = ["claude:a", "claude:b", "codex:c"]
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:a", in: ids, step: 1), "claude:b")
+        XCTAssertEqual(WidgetAccountStore.next(from: "codex:c", in: ids, step: 1), "claude:a")
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:a", in: ids, step: -1), "codex:c")
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:b", in: ids, step: -1), "claude:a")
+    }
+
+    func test_nextStepsFromTheDisplayedAccountMidList() {
+        // An unpicked widget shows the Mac's selection, e.g. only "work":
+        // down goes to the account after it, up to the one before.
+        let ids = ["claude:personal", "claude:work", "codex:codex"]
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:work", in: ids, step: 1), "codex:codex")
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:work", in: ids, step: -1), "claude:personal")
+    }
+
+    func test_nextStartsFromTheFirstAccountWithoutAPickOrWhenItIsGone() {
+        let ids = ["claude:a", "claude:b", "codex:c"]
+        XCTAssertEqual(WidgetAccountStore.next(from: nil, in: ids, step: 1), "claude:b")
+        XCTAssertEqual(WidgetAccountStore.next(from: "claude:gone", in: ids, step: -1), "codex:c")
+    }
+
+    func test_nextIsANoOpWithFewerThanTwoAccounts() {
+        XCTAssertNil(WidgetAccountStore.next(from: nil, in: [], step: 1))
+        XCTAssertNil(WidgetAccountStore.next(from: "claude:a", in: ["claude:a"], step: 1))
+    }
+
+    func test_cycleIDsPreferThePanelCache() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertEqual(WidgetAccountStore.cycleIDs(in: dir), [])
+
+        UsageSnapshotStore.write(UsageSnapshot(updatedAt: nil, accounts: [snapshot.accounts[0]]), to: dir)
+        XCTAssertEqual(WidgetAccountStore.cycleIDs(in: dir), ["claude:work"])
+
+        WidgetAccountStore.writePanel(snapshot, to: dir)
+        XCTAssertEqual(WidgetAccountStore.cycleIDs(in: dir), ["claude:work", "codex:work"])
+        // The `/usage` cache is left alone.
+        XCTAssertEqual(UsageSnapshotStore.read(from: dir)?.accounts.count, 1)
     }
 }

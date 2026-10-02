@@ -114,4 +114,48 @@ enum WidgetAccountStore {
         filtered.accounts = picked
         return filtered
     }
+
+    /// Cache of every account the app lists (`/panel`), beside the widget's
+    /// `/usage` cache in the App Group. Written by the app on each refresh
+    /// and by the widget while an account is picked; it is what the widget's
+    /// up/down buttons step through and what a picked widget falls back to
+    /// away from the Mac. Keeping it separate leaves the `/usage` cache
+    /// meaning "the Mac's selection" for unpicked widgets.
+    static let panelCacheName = "panel-snapshot.json"
+
+    static func readPanel(from dir: URL? = nil) -> UsageSnapshot? {
+        UsageSnapshotStore.read(from: dir, named: panelCacheName)
+    }
+
+    static func writePanel(_ snapshot: UsageSnapshot, to dir: URL? = nil) {
+        UsageSnapshotStore.write(snapshot, to: dir, named: panelCacheName)
+    }
+
+    static func clearPanel(in dir: URL? = nil) {
+        UsageSnapshotStore.clear(in: dir, named: panelCacheName)
+    }
+
+    /// Accounts the widget's buttons cycle through, in the Mac's order. Falls
+    /// back to the `/usage` cache before the app has ever written the panel one.
+    static func cycleAccounts(in dir: URL? = nil) -> [AccountUsage] {
+        (readPanel(from: dir) ?? UsageSnapshotStore.read(from: dir))?.accounts ?? []
+    }
+
+    static func cycleIDs(in dir: URL? = nil) -> [String] {
+        cycleAccounts(in: dir).map(\.id)
+    }
+
+    /// The account `step` places away from `current` — the one the widget
+    /// shows — wrapping around; from the first account when `current` isn't
+    /// in the list (the Mac dropped it since the cache was written). Nil — keep the
+    /// current pick — with fewer than two accounts. Never steps back to nil:
+    /// "Mac's selection" renders the same first account in the small and
+    /// medium widgets, so it would be a tap that changes nothing; the app's
+    /// menu is the way back to it.
+    static func next(from current: String?, in ids: [String], step: Int) -> String? {
+        guard ids.count > 1 else { return nil }
+        let index = current.flatMap { ids.firstIndex(of: $0) } ?? 0
+        let count = ids.count
+        return ids[((index + step) % count + count) % count]
+    }
 }

@@ -19,7 +19,12 @@ struct MobileUsageWidget: Widget {
             UsageWidgetView(entry: entry,
                             staleAfter: 3600,
                             emptyTitle: "No Mac selected",
-                            emptyHint: "open Claude Monitor")
+                            emptyHint: "open Claude Monitor",
+                            accountSwitcher: entry.switchableAccounts.count > 1
+                                ? { account, direction in
+                                    AnyView(AccountSwitcherButton(direction: direction, currentID: account.id,
+                                                                  accounts: entry.switchableAccounts))
+                                } : nil)
         }
         .configurationDisplayName("Claude Usage")
         .description("Usage limits from Claude Monitor on your Mac.")

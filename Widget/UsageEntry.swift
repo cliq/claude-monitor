@@ -6,6 +6,10 @@ import WidgetKit
 struct UsageEntry: TimelineEntry {
     let date: Date
     let snapshot: UsageSnapshot?
+    /// iOS only: the accounts the widget's up/down buttons step through, in
+    /// the Mac's order (the buttons show from two). Their names label the
+    /// buttons. The Mac widget leaves it empty.
+    var switchableAccounts: [AccountUsage] = []
 }
 
 extension UsageSnapshot {

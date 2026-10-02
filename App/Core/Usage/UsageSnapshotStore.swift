@@ -22,13 +22,14 @@ enum UsageSnapshotStore {
     /// Writes `snapshot` atomically by writing to a sibling `.tmp` and
     /// renaming. `dir` defaults to `containerURL()`; a nil dir (group
     /// unavailable) is a silent no-op — the app must work without the group.
-    /// All errors are swallowed for the same reason.
-    static func write(_ snapshot: UsageSnapshot, to dir: URL? = nil) {
+    /// All errors are swallowed for the same reason. `name` lets the iOS
+    /// widget keep a second cache beside this one (`WidgetAccountStore`).
+    static func write(_ snapshot: UsageSnapshot, to dir: URL? = nil, named name: String = fileName) {
         guard let dir = dir ?? containerURL() else { return }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-            let destination = dir.appendingPathComponent(fileName)
+            let destination = dir.appendingPathComponent(name)
             let tmp = destination.appendingPathExtension("tmp")
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: tmp, options: .atomic)
@@ -46,16 +47,16 @@ enum UsageSnapshotStore {
 
     /// Reads back the last-written snapshot. Nil `dir`, or a missing/corrupt
     /// file, returns nil.
-    static func read(from dir: URL? = nil) -> UsageSnapshot? {
+    static func read(from dir: URL? = nil, named name: String = fileName) -> UsageSnapshot? {
         guard let dir = dir ?? containerURL() else { return nil }
-        let destination = dir.appendingPathComponent(fileName)
+        let destination = dir.appendingPathComponent(name)
         guard let data = try? Data(contentsOf: destination) else { return nil }
         return try? JSONDecoder().decode(UsageSnapshot.self, from: data)
     }
 
     /// Removes the snapshot file, ignoring errors (missing file included).
-    static func clear(in dir: URL? = nil) {
+    static func clear(in dir: URL? = nil, named name: String = fileName) {
         guard let dir = dir ?? containerURL() else { return }
-        try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
     }
 }

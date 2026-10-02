@@ -17,6 +17,7 @@ final class UsageStore: ObservableObject {
             BridgeEndpointStore.save(endpoint, to: defaults)
             // Account ids from another Mac mean nothing here.
             widgetAccountID = nil
+            WidgetAccountStore.clearPanel(in: cacheDir)
             snapshot = nil
             errorMessage = nil
             reloadWidget()
@@ -35,14 +36,18 @@ final class UsageStore: ObservableObject {
     }
 
     private let defaults: UserDefaults
+    /// Where the widget's panel cache lives; nil is the App Group container.
+    private let cacheDir: URL?
     private let reloadWidgets: () -> Void
     private var loop: Task<Void, Never>?
 
     init(defaults: UserDefaults = BridgeEndpointStore.sharedDefaults,
+         cacheDir: URL? = nil,
          reloadWidgets: @escaping () -> Void = {
              WidgetCenter.shared.reloadTimelines(ofKind: UsageSnapshotStore.widgetKind)
          }) {
         self.defaults = defaults
+        self.cacheDir = cacheDir
         self.reloadWidgets = reloadWidgets
         // First builds saved the choice in standard defaults; carry it over
         // so the widget can see it.
@@ -62,6 +67,7 @@ final class UsageStore: ObservableObject {
     }
 
     func startPolling() {
+        syncWidgetAccount()
         loop?.cancel()
         loop = Task { [weak self] in
             while !Task.isCancelled {
@@ -85,6 +91,7 @@ final class UsageStore: ObservableObject {
             // The widget fetches for itself; nudge it only when the Mac has
             // polled again, not on every 30s refresh.
             if snapshot.updatedAt != self.snapshot?.updatedAt { reloadWidget() }
+            WidgetAccountStore.writePanel(snapshot, to: cacheDir)
             self.snapshot = snapshot
             errorMessage = nil
         } catch is CancellationError {
@@ -95,6 +102,14 @@ final class UsageStore: ObservableObject {
     }
 
     private func reloadWidget() { reloadWidgets() }
+
+    /// The widget's up/down buttons change the pick while the app is in the
+    /// background; pick that up so the toolbar menu doesn't show a stale one.
+    /// Goes through `didSet`, so it also reloads the widget once — harmless,
+    /// it only happens after the widget changed the pick.
+    func syncWidgetAccount() {
+        widgetAccountID = WidgetAccountStore.load(from: defaults)
+    }
 
     /// `/panel` has every polled account; Mac builds that predate it only
     /// serve `/usage` (the widget/ESP32 selection), so fall back on 404.

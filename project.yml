@@ -215,7 +215,8 @@ targets:
         embed: true
   # Home Screen widget. Reuses the Mac widget's view; fetches `/usage` (or
   # `/panel`, narrowed to the account picked in the app) from the Mac the app
-  # selected (both choices shared through the App Group).
+  # selected (both choices shared through the App Group). Its up/down buttons
+  # switch the picked account via an AppIntent.
   ClaudeMonitorMobileWidget:
     type: app-extension
     platform: iOS

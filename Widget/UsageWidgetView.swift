@@ -11,6 +11,11 @@ struct UsageWidgetView: View {
     var staleAfter: TimeInterval = UsageFormat.staleAfter
     var emptyTitle = "Usage monitoring off"
     var emptyHint = "open ClaudeMonitor"
+    /// The iOS widget's up/down account buttons, right-aligned rows above and
+    /// below the account rows. Injected because their `AppIntent` lives in
+    /// the iOS widget target; called with the account shown first, which the
+    /// buttons step from.
+    var accountSwitcher: ((AccountUsage, AccountSwitchDirection) -> AnyView)?
 
     var body: some View {
         Group {
@@ -43,15 +48,23 @@ struct UsageWidgetView: View {
         switch family {
         case .systemSmall:
             if let account = snapshot.accounts.first {
-                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: true, maxMetrics: 2)
-                    .padding(12)
+                VStack(alignment: .leading, spacing: 4) {
+                    switcherRow(for: account, .previous)
+                    UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: true, maxMetrics: 2)
+                    switcherRow(for: account, .next)
+                }
+                .padding(12)
             } else {
                 emptyState
             }
         case .systemMedium:
             if let account = snapshot.accounts.first {
-                UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: false, maxMetrics: 3)
-                    .padding(14)
+                VStack(alignment: .leading, spacing: 4) {
+                    switcherRow(for: account, .previous)
+                    UsageAccountBlock(account: account, now: entry.date, isStale: isStale, compact: false, maxMetrics: 3)
+                    switcherRow(for: account, .next)
+                }
+                .padding(14)
             } else {
                 emptyState
             }
@@ -64,6 +77,9 @@ struct UsageWidgetView: View {
                 if accounts.isEmpty {
                     emptyState
                 } else {
+                    switcherRow(for: accounts[0], .previous)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 10)
                     ForEach(Array(accounts.enumerated()), id: \.element.id) { i, account in
                         UsageAccountBlock(
                             account: account,
@@ -78,12 +94,24 @@ struct UsageWidgetView: View {
                             Rectangle().fill(UsagePalette.line).frame(height: 1)
                         }
                     }
+                    switcherRow(for: accounts[0], .next)
+                        .padding(.horizontal, 14)
                 }
                 Spacer(minLength: 0)
                 Rectangle().fill(UsagePalette.line).frame(height: 1)
                 statusLine(updated: updated, isStale: isStale)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func switcherRow(for account: AccountUsage, _ direction: AccountSwitchDirection) -> some View {
+        if let accountSwitcher {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                accountSwitcher(account, direction)
             }
         }
     }
@@ -113,6 +141,14 @@ struct UsageWidgetView: View {
     }
 }
 
+/// Which way an iOS widget account button steps: up to the previous account
+/// the app lists, down to the next.
+enum AccountSwitchDirection {
+    case previous, next
+
+    var step: Int { self == .previous ? -1 : 1 }
+}
+
 private struct UsageAccountBlock: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
     let account: AccountUsage
@@ -130,10 +166,13 @@ private struct UsageAccountBlock: View {
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(1.2)
                     .foregroundStyle(UsagePalette.name)
+                    // Dims while an iOS account switch is pending.
+                    .invalidatableContent()
                 Text(account.provider.displayName.uppercased())
                     .font(.system(size: 7, weight: .medium))
                     .kerning(0.8)
                     .foregroundStyle(UsagePalette.muted)
+                    .invalidatableContent()
                 Spacer()
                 Circle()
                     .fill(account.status == "error" || isStale ? UsagePalette.crit : UsagePalette.okDot)

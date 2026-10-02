@@ -128,8 +128,15 @@ Simulator,id=<udid>'` runs its tests.
 `UsageSnapshotStore` for when the Mac is unreachable. The app's toolbar widget menu can instead pin the widget to one of the
 accounts the app lists (`WidgetAccountStore`, keyed by the provider-qualified `AccountUsage.id`, cleared when the Mac
 changes): the widget then reads `/panel` and filters to it after the cache read, falling back to every account if the Mac
-no longer reports it. The selected Mac is shared through `BridgeEndpointStore` in the App Group's defaults. The iOS group
-is `IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)` — not team-prefixed like the Mac one; automatic signing registers it.
+no longer reports it. The widget's up/down chevrons (`SwitchWidgetAccountIntent`, an `AppIntent` button run in the
+extension) pick the account before/after the one on screen (not the stored pick — an unpicked widget shows the Mac's
+selection) among the accounts the app lists, read from a second App Group cache
+(`WidgetAccountStore.panelCacheName`, written by the app on each refresh and by a picked widget) so taps work offline and
+the `/usage` cache keeps meaning "the Mac's selection"; WidgetKit reloads the timeline after the intent, and the app re-reads
+the pick when it becomes active. The shared `UsageWidgetView` takes the buttons as an injected `accountSwitcher` view so
+the Mac widget target never sees the intent; they sit right-aligned above and below the account rows, each labelled with
+the account a tap will show (`UsageEntry.switchableAccounts`). The selected Mac is shared through `BridgeEndpointStore` in the App Group's
+defaults. The iOS group is `IOS_APP_GROUP_ID = group.$(IOS_APP_BUNDLE_ID)` — not team-prefixed like the Mac one; automatic signing registers it.
 The app only calls `reloadTimelines` when the Mac's `updated_at` changes, or the Mac or widget account is changed.
 
 ### Update checks
