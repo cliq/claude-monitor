@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowVisibilityCancellable: AnyCancellable?
     private var usagePoller: UsagePoller?
     private var usageBridge: UsageBridgeServer?
+    @MainActor private lazy var sessionFeed = SessionFeed()
     private var usagePanelWindow: UsagePanelWindow?
     private var usageCancellables: Set<AnyCancellable> = []
     private var lastPublishedAccountsHash: Int?
@@ -316,9 +317,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if wantBridge, usageBridge == nil, let poller = usagePoller {
             let prefs = preferences
+            let feed = sessionFeed
+            let store = store
             let bridge = UsageBridgeServer(snapshot: { poller.externalSnapshot() },
                                            panel: { poller.snapshot() },
-                                           display: { prefs.usageBridgeMirrorsDisplay ? poller.displayOn : true })
+                                           display: { prefs.usageBridgeMirrorsDisplay ? poller.displayOn : true },
+                                           sessions: { feed.snapshot(of: store?.visibleSessions ?? []) })
             do {
                 try bridge.start(port: desiredPort, advertise: true)
                 usageBridge = bridge

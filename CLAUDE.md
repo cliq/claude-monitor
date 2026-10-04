@@ -78,8 +78,8 @@ UsageAccountConfig.discover() — Claude dirs via ConfigDirectoryDiscovery.scan(
   → UsageBridgeServer — GET /usage + /display on LAN port 8737 (default) for
     the ESP32 desk panel (esp32-claude-monitor firmware); serves
     `poller.externalSnapshot()`. GET /panel serves `poller.snapshot()` (every
-    account) for the iOS app; the listener advertises `_claudemonitor._tcp`
-    over Bonjour
+    account) for the iOS app, GET /sessions the dashboard's sessions
+    (`SessionFeed`); the listener advertises `_claudemonitor._tcp` over Bonjour
   → UsageSnapshotStore — usage-snapshot.json in the App Group container,
     written after each poll (UsagePoller's injected `publish` hook, which
     also receives the external snapshot)
@@ -119,8 +119,16 @@ The widget never polls or touches the keychain: it renders the last `UsageSnapsh
 
 ### iOS app
 
-`ClaudeMonitorMobile` (scheme of the same name, sources in `iOS/`, tests in `iOSTests/`) is an iPhone/iPad app that
-currently shows only the usage panel. It never polls Anthropic/Codex itself: it reads the Mac's cached snapshot from
+`ClaudeMonitorMobile` (scheme of the same name, sources in `iOS/`, tests in `iOSTests/`) is an iPhone/iPad app with two
+tabs: Sessions and Usage. Sessions polls the bridge's `GET /sessions` every 3s while in the foreground (`SessionsStore`)
+and renders `SessionsSnapshot` tiles colored by the shared `Palette`. `SessionFeed` builds that snapshot on the Mac from
+`store.visibleSessions` as the wire DTO `RemoteSession`, never `Session` itself (ttys/transcript paths stay on the Mac; dates are ISO
+8601 strings; snake_case keys are additive-only). Sessions hosted by Chauffeur carry `chauffeur_url`, read from the agent
+process's `CHAUFFEUR_SESSION_URL` with `ps eww` (cached per pid, validated like `ChauffeurProvider`); tapping such a tile
+opens it in the Chauffeur iPhone app, which registers the same per-build scheme as the Mac (`chauffeur`, or `chauffeur-debug` in Debug)
+(`LSApplicationQueriesSchemes` in `project.yml` lets the tile check it's installed). A Mac that predates `/sessions` answers 404 →
+"Update Claude Monitor on the Mac". `/sessions` shares the bridge, so it only runs while usage monitoring and "Serve usage
+to external displays" are on. The Usage tab never polls Anthropic/Codex itself: it reads the Mac's cached snapshot from
 `UsageBridgeServer` `/panel` (falling back to `/usage` on 404 for Mac builds that predate it) every 30s while in the
 foreground. Macs are found with `NWBrowser` on `_claudemonitor._tcp` or typed as `host[:port]`; requests are raw HTTP over
 `NWConnection` (`BridgeClient`), so Bonjour endpoints need no resolve step and ATS doesn't apply. The service type must stay

@@ -177,6 +177,10 @@ targets:
       - path: App/Models/UsageModels.swift
       - path: App/Models/AgentProvider.swift
       - path: App/Models/RGB.swift
+      - path: App/Models/RemoteSessions.swift
+      - path: App/Models/SessionState.swift
+      - path: App/Models/Palette.swift
+      - path: App/Models/PaletteID.swift
       - path: App/UI/UsagePalette.swift
       - path: App/UI/UsageAccountRow.swift
       - path: App/Core/Usage/UsageFormatting.swift
@@ -189,10 +193,15 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSHumanReadableCopyright: "Copyright © 2026 Cliq Consulting LLC. All rights reserved."
-        NSLocalNetworkUsageDescription: "Claude Monitor reads usage limits from the Claude Monitor app on your Mac over your local network."
+        NSLocalNetworkUsageDescription: "Claude Monitor reads agent sessions and usage limits from the Claude Monitor app on your Mac over your local network."
         # Must match UsageBridgeServer.bonjourServiceType / BridgeEndpoint.serviceType.
         NSBonjourServices:
           - _claudemonitor._tcp
+        # Chauffeur's session deep links (RemoteSession.chauffeurSchemes): lets a
+        # tile tell whether the Chauffeur iPhone app can open its session.
+        LSApplicationQueriesSchemes:
+          - chauffeur
+          - chauffeur-debug
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations:

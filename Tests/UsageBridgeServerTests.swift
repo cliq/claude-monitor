@@ -76,6 +76,38 @@ final class UsageBridgeServerTests: XCTestCase {
         XCTAssertEqual(String(data: offBody, encoding: .utf8), "off")
     }
 
+    func test_sessionsEndpointServesSessionsSnapshot() async throws {
+        let snapshot = SessionsSnapshot(generatedAt: "2026-10-04T12:00:00Z", sessions: [
+            RemoteSession(id: "abc", provider: .codex, project: "repo", cwd: "/tmp/repo", state: .needsYou,
+                          enteredStateAt: "2026-10-04T11:59:00Z", promptPreview: "fix it",
+                          chauffeurURL: "chauffeur://session/A/B"),
+        ])
+        let server = UsageBridgeServer(snapshot: { UsageSnapshot(updatedAt: nil, accounts: []) },
+                                       display: { true }, sessions: { snapshot })
+        try server.start(port: 0)
+        defer { server.stop() }
+
+        let (status, data) = try await get("/sessions", port: try XCTUnwrap(server.port))
+        XCTAssertEqual(status, 200)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["generated_at"] as? String, "2026-10-04T12:00:00Z")
+        let first = (json["sessions"] as! [[String: Any]])[0]
+        XCTAssertEqual(first["state"] as? String, "needsYou")
+        XCTAssertEqual(first["provider"] as? String, "codex")
+        XCTAssertEqual(first["entered_state_at"] as? String, "2026-10-04T11:59:00Z")
+        XCTAssertEqual(first["prompt_preview"] as? String, "fix it")
+        XCTAssertEqual(first["chauffeur_url"] as? String, "chauffeur://session/A/B")
+        XCTAssertEqual(try JSONDecoder().decode(SessionsSnapshot.self, from: data), snapshot)
+    }
+
+    func test_sessionsEndpointDefaultsToEmpty() async throws {
+        let server = try makeServer()
+        defer { server.stop() }
+        let (status, data) = try await get("/sessions", port: try XCTUnwrap(server.port))
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(try JSONDecoder().decode(SessionsSnapshot.self, from: data).sessions, [])
+    }
+
     func test_unknownPathIs404() async throws {
         let server = try makeServer()
         defer { server.stop() }

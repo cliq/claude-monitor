@@ -7,6 +7,8 @@ import Network
 ///   GET /panel   -> same schema with every polled account — the full usage
 ///                   panel, as the iOS app renders it
 ///   GET /display -> "on" | "off" (Mac display power state, plain text)
+///   GET /sessions -> the dashboard's visible agent sessions (`SessionsSnapshot`)
+///                   for the iOS app's session tiles
 ///
 /// Unlike `EventServer` (loopback, ephemeral port published via the port file),
 /// this listens on all interfaces at a fixed user-configured port — the ESP32
@@ -22,17 +24,23 @@ final class UsageBridgeServer {
     private let snapshotProvider: @MainActor () -> UsageSnapshot
     private let panelProvider: @MainActor () -> UsageSnapshot
     private let displayProvider: @MainActor () -> Bool
+    private let sessionsProvider: @MainActor () -> SessionsSnapshot
 
     /// Live port after `start()`. Nil before or on failure.
     private(set) var port: UInt16?
 
-    /// `panel` defaults to `snapshot` when the caller has no wider view.
+    /// `panel` defaults to `snapshot` when the caller has no wider view;
+    /// `sessions` defaults to an empty list.
     init(snapshot: @escaping @MainActor () -> UsageSnapshot,
          panel: (@MainActor () -> UsageSnapshot)? = nil,
-         display: @escaping @MainActor () -> Bool) {
+         display: @escaping @MainActor () -> Bool,
+         sessions: (@MainActor () -> SessionsSnapshot)? = nil) {
         self.snapshotProvider = snapshot
         self.panelProvider = panel ?? snapshot
         self.displayProvider = display
+        self.sessionsProvider = sessions ?? {
+            SessionsSnapshot(generatedAt: ISO8601DateFormatter().string(from: Date()), sessions: [])
+        }
     }
 
     /// `advertise` publishes the listener over Bonjour (named after this Mac)
@@ -109,6 +117,9 @@ final class UsageBridgeServer {
                 (status, body, ctype) = ("200 OK", json, "application/json")
             case "/panel":
                 let json = (try? JSONEncoder().encode(self.panelProvider())) ?? Data("{}".utf8)
+                (status, body, ctype) = ("200 OK", json, "application/json")
+            case "/sessions":
+                let json = (try? JSONEncoder().encode(self.sessionsProvider())) ?? Data("{}".utf8)
                 (status, body, ctype) = ("200 OK", json, "application/json")
             case "/display":
                 let on = self.displayProvider()
