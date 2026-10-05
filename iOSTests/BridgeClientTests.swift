@@ -57,10 +57,31 @@ final class BridgeEndpointTests: XCTestCase {
         defaults.removePersistentDomain(forName: "BridgeEndpointTests")
         defer { defaults.removePersistentDomain(forName: "BridgeEndpointTests") }
 
-        let store = UsageStore(defaults: defaults, reloadWidgets: {})
+        let store = UsageStore(defaults: defaults, legacyDefaults: nil, reloadWidgets: {})
         XCTAssertNil(store.endpoint)
         store.endpoint = .bonjour(name: "Studio")
-        XCTAssertEqual(UsageStore(defaults: defaults, reloadWidgets: {}).endpoint, .bonjour(name: "Studio"))
+        XCTAssertEqual(UsageStore(defaults: defaults, legacyDefaults: nil, reloadWidgets: {}).endpoint,
+                       .bonjour(name: "Studio"))
+    }
+
+    @MainActor
+    func test_storeCarriesOverLegacyEndpoint() {
+        let defaults = UserDefaults(suiteName: "BridgeEndpointTests")!
+        let legacy = UserDefaults(suiteName: "BridgeEndpointTests.legacy")!
+        for name in ["BridgeEndpointTests", "BridgeEndpointTests.legacy"] {
+            defaults.removePersistentDomain(forName: name)
+        }
+        defer {
+            for name in ["BridgeEndpointTests", "BridgeEndpointTests.legacy"] {
+                defaults.removePersistentDomain(forName: name)
+            }
+        }
+
+        BridgeEndpointStore.save(.manual(host: "mac.local", port: 9000), to: legacy)
+        XCTAssertEqual(UsageStore(defaults: defaults, legacyDefaults: legacy, reloadWidgets: {}).endpoint,
+                       .manual(host: "mac.local", port: 9000))
+        // Copied into the shared store, so the widget sees it too.
+        XCTAssertEqual(BridgeEndpointStore.load(from: defaults), .manual(host: "mac.local", port: 9000))
     }
 
     @MainActor

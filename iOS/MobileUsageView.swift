@@ -5,80 +5,18 @@ import SwiftUI
 /// (`UsageAccountRow`) and status bar, fed by the LAN bridge.
 struct MobileUsageView: View {
     @ObservedObject var store: UsageStore
-    @ObservedObject var browser: BridgeBrowser
+    let chooseMac: () -> Void
     @AppStorage("usagePanelCompact") private var compact = false
-    @State private var showingPicker = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                content
-                    .frame(maxWidth: 640)
-                    .frame(maxWidth: .infinity)
-            }
-            .refreshable { await store.refresh() }
-            .background(UsagePalette.bg)
-            .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
-            .navigationTitle("Usage")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(UsagePalette.statusBg, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        compact.toggle()
-                    } label: {
-                        Image(systemName: compact ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
-                    }
-                    .accessibilityLabel(compact ? "Regular layout" : "Compact layout")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    widgetAccountMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingPicker = true
-                    } label: {
-                        Image(systemName: "desktopcomputer")
-                    }
-                    .accessibilityLabel("Choose Mac")
-                }
-            }
-            .tint(UsagePalette.name)
+        ScrollView {
+            content
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showingPicker) {
-            ServerPickerView(store: store, browser: browser)
-        }
-        .onAppear {
-            if store.endpoint == nil { showingPicker = true }
-        }
-    }
-
-    /// Picks the one account the Home Screen widget shows, from the accounts
-    /// listed here. "Mac's selection" keeps the accounts checked under
-    /// "Widget · ESP32" on the Mac.
-    private var widgetAccountMenu: some View {
-        let accounts = store.snapshot?.accounts ?? []
-        return Menu {
-            Section("Home Screen widget") {
-                Picker("Widget account", selection: $store.widgetAccountID) {
-                    Text("Mac's selection").tag(String?.none)
-                    ForEach(accounts) { account in
-                        Text("\(account.name) · \(account.provider.displayName)").tag(Optional(account.id))
-                    }
-                    // Keep a pick the Mac no longer reports visible (the
-                    // widget shows every account meanwhile).
-                    if let id = store.widgetAccountID, !accounts.contains(where: { $0.id == id }) {
-                        Text("\(id) (unavailable)").tag(Optional(id))
-                    }
-                }
-                .pickerStyle(.inline)
-            }
-        } label: {
-            Image(systemName: "square.grid.2x2")
-        }
-        .disabled(accounts.isEmpty && store.widgetAccountID == nil)
-        .accessibilityLabel("Widget account")
+        .refreshable { await store.refresh() }
+        .background(UsagePalette.bg)
+        .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
     }
 
     @ViewBuilder
@@ -112,7 +50,7 @@ struct MobileUsageView: View {
                 .foregroundStyle(UsagePalette.muted)
                 .multilineTextAlignment(.center)
             if let action {
-                Button(action) { showingPicker = true }
+                Button(action, action: chooseMac)
                     .buttonStyle(.bordered)
             }
         }
@@ -155,5 +93,51 @@ struct MobileUsageView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "HH:mm"
         return "updated \(fmt.string(from: updated)) · \(endpoint.displayName)"
+    }
+}
+
+/// Toggles the compact one-row-per-account layout; shown in the Usage tab's
+/// toolbar.
+struct UsageLayoutToggle: View {
+    @AppStorage("usagePanelCompact") private var compact = false
+
+    var body: some View {
+        Button {
+            compact.toggle()
+        } label: {
+            Image(systemName: compact ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+        }
+        .accessibilityLabel(compact ? "Regular layout" : "Compact layout")
+    }
+}
+
+/// Picks the one account the Home Screen widget shows, from the accounts
+/// listed in the Usage tab. "Mac's selection" keeps the accounts checked under
+/// "Widget · ESP32" on the Mac.
+struct WidgetAccountMenu: View {
+    @ObservedObject var store: UsageStore
+
+    var body: some View {
+        let accounts = store.snapshot?.accounts ?? []
+        return Menu {
+            Section("Home Screen widget") {
+                Picker("Widget account", selection: $store.widgetAccountID) {
+                    Text("Mac's selection").tag(String?.none)
+                    ForEach(accounts) { account in
+                        Text("\(account.name) · \(account.provider.displayName)").tag(Optional(account.id))
+                    }
+                    // Keep a pick the Mac no longer reports visible (the
+                    // widget shows every account meanwhile).
+                    if let id = store.widgetAccountID, !accounts.contains(where: { $0.id == id }) {
+                        Text("\(id) (unavailable)").tag(Optional(id))
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+        } label: {
+            Image(systemName: "square.grid.2x2")
+        }
+        .disabled(accounts.isEmpty && store.widgetAccountID == nil)
+        .accessibilityLabel("Widget account")
     }
 }

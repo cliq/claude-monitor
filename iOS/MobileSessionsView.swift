@@ -8,60 +8,19 @@ import UIKit
 struct MobileSessionsView: View {
     @ObservedObject var sessions: SessionsStore
     @ObservedObject var store: UsageStore
-    @ObservedObject var browser: BridgeBrowser
+    let chooseMac: () -> Void
     @AppStorage("sessionPalette") private var paletteID: PaletteID = .vibrant
-    @State private var showingPicker = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                content
-                    .frame(maxWidth: 900)
-                    .frame(maxWidth: .infinity)
-            }
-            .refreshable { await sessions.refresh() }
-            .background(UsagePalette.bg)
-            .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
-            .navigationTitle("Sessions")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(UsagePalette.statusBg, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    paletteMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingPicker = true
-                    } label: {
-                        Image(systemName: "desktopcomputer")
-                    }
-                    .accessibilityLabel("Choose Mac")
-                }
-            }
-            .tint(UsagePalette.name)
+        ScrollView {
+            content
+                .frame(maxWidth: 900)
+                .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showingPicker) {
-            ServerPickerView(store: store, browser: browser)
-        }
-        .onAppear {
-            if store.endpoint == nil { showingPicker = true }
-        }
-    }
-
-    private var paletteMenu: some View {
-        Menu {
-            Picker("Colors", selection: $paletteID) {
-                ForEach(Palette.all, id: \.id) { palette in
-                    Text(palette.displayName).tag(palette.id)
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Image(systemName: "paintpalette")
-        }
-        .accessibilityLabel("Tile colors")
+        .refreshable { await sessions.refresh() }
+        .background(UsagePalette.bg)
+        .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
     }
 
     @ViewBuilder
@@ -117,7 +76,7 @@ struct MobileSessionsView: View {
                 .foregroundStyle(UsagePalette.muted)
                 .multilineTextAlignment(.center)
             if let action {
-                Button(action) { showingPicker = true }
+                Button(action, action: chooseMac)
                     .buttonStyle(.bordered)
             }
         }
@@ -150,6 +109,25 @@ struct MobileSessionsView: View {
         }
         guard let count = sessions.snapshot?.sessions.count else { return endpoint.displayName }
         return "\(count) session\(count == 1 ? "" : "s") · \(endpoint.displayName)"
+    }
+}
+
+/// Picks the tile color palette; shown in the Sessions tab's toolbar.
+struct SessionPaletteMenu: View {
+    @AppStorage("sessionPalette") private var paletteID: PaletteID = .vibrant
+
+    var body: some View {
+        Menu {
+            Picker("Colors", selection: $paletteID) {
+                ForEach(Palette.all, id: \.id) { palette in
+                    Text(palette.displayName).tag(palette.id)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: "paintpalette")
+        }
+        .accessibilityLabel("Tile colors")
     }
 }
 

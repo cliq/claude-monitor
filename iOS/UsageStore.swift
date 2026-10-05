@@ -41,7 +41,10 @@ final class UsageStore: ObservableObject {
     private let reloadWidgets: () -> Void
     private var loop: Task<Void, Never>?
 
+    /// `legacyDefaults` is where first builds saved the Mac choice; tests
+    /// pass their own suite so the host app's saved Mac can't leak in.
     init(defaults: UserDefaults = BridgeEndpointStore.sharedDefaults,
+         legacyDefaults: UserDefaults? = .standard,
          cacheDir: URL? = nil,
          reloadWidgets: @escaping () -> Void = {
              WidgetCenter.shared.reloadTimelines(ofKind: UsageSnapshotStore.widgetKind)
@@ -52,8 +55,8 @@ final class UsageStore: ObservableObject {
         // First builds saved the choice in standard defaults; carry it over
         // so the widget can see it.
         if BridgeEndpointStore.load(from: defaults) == nil,
-           defaults != .standard,
-           let legacy = BridgeEndpointStore.load(from: .standard) {
+           let legacyDefaults, legacyDefaults != defaults,
+           let legacy = BridgeEndpointStore.load(from: legacyDefaults) {
             BridgeEndpointStore.save(legacy, to: defaults)
         }
         self.endpoint = BridgeEndpointStore.load(from: defaults)
