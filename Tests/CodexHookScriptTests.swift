@@ -4,9 +4,14 @@ import XCTest
 
 final class CodexHookScriptTests: XCTestCase {
 
+    /// Codex's shared daemon (`codex app-server --listen unix:// --managed-daemon`).
+    private static let managedDaemon = "codex app-server --listen unix:// --managed-daemon"
+    /// A per-task stdio app-server, as the Codex companion plugin starts one.
+    private static let taskAppServer = "codex app-server"
+
     private func runScript(hook: String, stdin: String, expectEvent: Bool = true,
-                           underManagedDaemon: Bool = false, cwd: URL? = nil,
-                           codexHome: String? = nil) async throws -> HookEvent? {
+                           parentCommand: String? = nil, cwd: URL? = nil,
+                           codexHome: String? = nil, claudePid: pid_t? = nil) async throws -> HookEvent? {
         let scriptURL = try XCTUnwrap(findScript(), "could not find codex-hook.sh")
 
         var received: [HookEvent] = []
@@ -33,18 +38,19 @@ final class CodexHookScriptTests: XCTestCase {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-        if underManagedDaemon {
-            // A parent bash whose command line looks like Codex's shared daemon
-            // (`codex app-server --listen unix:// --managed-daemon`). The trailing
-            // `exit` keeps bash from exec'ing the hook, so it stays the parent.
+        if let parentCommand {
+            // A parent bash whose command line looks like `parentCommand`. The
+            // trailing `exit` keeps bash from exec'ing the hook, so it stays the parent.
             proc.arguments = ["-c", "/bin/bash \"$1\" \"$2\"; exit 0",
-                              "codex app-server --listen unix:// --managed-daemon", scriptURL.path, hook]
+                              parentCommand, scriptURL.path, hook]
         } else {
             proc.arguments = [scriptURL.path, hook]
         }
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = tmpHome.path
         if let codexHome { env["CODEX_HOME"] = codexHome }
+        // `make test` run from a Claude Code session inherits its real CLAUDE_PID.
+        env["CLAUDE_PID"] = claudePid.map(String.init)
         proc.environment = env
         if let cwd { proc.currentDirectoryURL = cwd }
 
@@ -156,7 +162,7 @@ final class CodexHookScriptTests: XCTestCase {
 
         let received = try await runScript(
             hook: "UserPromptSubmit", stdin: #"{"session_id":"s","prompt":"hi"}"#,
-            underManagedDaemon: true, cwd: fixture.project, codexHome: fixture.codexHome)
+            parentCommand: Self.managedDaemon, cwd: fixture.project, codexHome: fixture.codexHome)
         let event = try XCTUnwrap(received)
         XCTAssertEqual(event.pid, tui.processIdentifier,
                        "the daemon's pid is shared by every session and never exits")
@@ -172,7 +178,7 @@ final class CodexHookScriptTests: XCTestCase {
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
         let received = try await runScript(
             hook: "Stop", stdin: #"{"session_id":"s"}"#,
-            underManagedDaemon: true, cwd: elsewhere, codexHome: fixture.codexHome)
+            parentCommand: Self.managedDaemon, cwd: elsewhere, codexHome: fixture.codexHome)
         let event = try XCTUnwrap(received)
         XCTAssertEqual(event.pid, 0)
         XCTAssertEqual(event.tty, "")
@@ -186,9 +192,89 @@ final class CodexHookScriptTests: XCTestCase {
 
         let received = try await runScript(
             hook: "Stop", stdin: #"{"session_id":"s"}"#,
-            underManagedDaemon: true, cwd: fixture.project, codexHome: fixture.codexHome)
+            parentCommand: Self.managedDaemon, cwd: fixture.project, codexHome: fixture.codexHome)
         let event = try XCTUnwrap(received)
         XCTAssertEqual(event.pid, 0, "guessing could focus another session's terminal")
+    }
+
+    func test_taskAppServerFromClaudeCodeIsAnchoredToTheClaudeCLI() async throws {
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            parentCommand: Self.taskAppServer, claudePid: claude.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, claude.processIdentifier,
+                       "the companion's app-server outlives a Claude session that dies without SessionEnd")
+    }
+
+    func test_taskAppServerWhoseClaudeCLIExitedReportsTheExitedPid() async throws {
+        let gone = Process()
+        gone.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try gone.run()
+        gone.waitUntilExit()
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            parentCommand: Self.taskAppServer, claudePid: gone.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, gone.processIdentifier, "so the sweeper clears the tile")
+    }
+
+    func test_taskAppServerKeepsItsOwnPidWhenClaudePidWasRecycled() async throws {
+        let stranger = try launchProcess(named: "sleep")
+        defer { stranger.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            parentCommand: Self.taskAppServer, claudePid: stranger.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertNotEqual(event.pid, stranger.processIdentifier, "a wrong pid would focus another program")
+        XCTAssertGreaterThan(event.pid, 0)
+    }
+
+    func test_taskAppServerOutsideClaudeCodeReportsItsOwnPid() async throws {
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#, parentCommand: Self.taskAppServer)
+        let event = try XCTUnwrap(received)
+        XCTAssertGreaterThan(event.pid, 0)
+        XCTAssertNotEqual(event.pid, getpid())
+    }
+
+    func test_codexTUILaunchedFromClaudeCodeReportsItsOwnPid() async throws {
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#, claudePid: claude.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, getpid(), "only app-servers are re-anchored, not an interactive codex")
+    }
+
+    func test_managedDaemonParentIgnoresClaudePid() async throws {
+        let fixture = try FakeCodexTUI()
+        defer { fixture.stop() }
+        let tui = try fixture.launch()
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            parentCommand: Self.managedDaemon, cwd: fixture.project, codexHome: fixture.codexHome,
+            claudePid: claude.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, tui.processIdentifier,
+                       "the daemon's environment belongs to whichever session started it")
+    }
+
+    /// A long-running process whose command line starts with `name`.
+    private func launchProcess(named name: String) throws -> Process {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = ["-c", "exec -a \(name) /bin/sleep 30"]
+        try proc.run()
+        return proc
     }
 
     /// Resolve the codex-hook.sh location — bundled test resource first, repo fallback.

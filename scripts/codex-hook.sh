@@ -32,9 +32,8 @@ STDIN_JSON="$(cat 2>/dev/null)"
 # matches report pid 0 rather than guess: a wrong pid would focus another
 # session's terminal, or keep this tile alive after its TUI exits.
 SOURCE_PID="$PPID"
-# A per-task `codex app-server` over stdio (e.g. the Codex companion plugin)
-# lives and dies with its session, so only the managed daemon is replaced.
-if ps -o command= -p "$PPID" 2>/dev/null | grep -q 'app-server.*--managed-daemon'; then
+PARENT_COMMAND="$(ps -o command= -p "$PPID" 2>/dev/null)"
+if printf '%s' "$PARENT_COMMAND" | grep -q 'app-server.*--managed-daemon'; then
   SOURCE_PID=0
   HOOK_CWD="$(pwd -P)"
   MATCHES=""
@@ -53,6 +52,21 @@ if ps -o command= -p "$PPID" 2>/dev/null | grep -q 'app-server.*--managed-daemon
   done < <(ps -axo pid=,command= 2>/dev/null)
   set -- $MATCHES
   [ "$#" -eq 1 ] && SOURCE_PID="$1"
+elif printf '%s' "$PARENT_COMMAND" | grep -q 'codex app-server'; then
+  # A per-task `codex app-server` over stdio, e.g. one the Codex companion plugin
+  # starts from a Claude Code session. Its broker is detached and only stopped by
+  # that session's SessionEnd hook, so when the session dies without one the
+  # app-server idles forever and its tile would never clear. Anchor the tile to
+  # the Claude CLI instead (Claude Code exports CLAUDE_PID): its liveness is the
+  # task's, and its tty and environment point at the session that is waiting.
+  # A pid recycled by some other program keeps the app-server.
+  case "$CLAUDE_PID" in
+    ""|*[!0-9]*) ;;
+    *)
+      OWNER_COMMAND="$(ps -o command= -p "$CLAUDE_PID" 2>/dev/null)"
+      case "$OWNER_COMMAND" in ""|*claude*) SOURCE_PID="$CLAUDE_PID" ;; esac
+      ;;
+  esac
 fi
 
 # TTY: the hook JSON is piped on stdin, so `tty` on our own fd never works. Ask
