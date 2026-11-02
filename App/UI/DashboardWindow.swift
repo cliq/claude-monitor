@@ -12,8 +12,17 @@ final class DashboardWindow {
     private var workspaceObservers: [NSObjectProtocol] = []
 
     private let emptyStateSize = NSSize(width: 260, height: 120)
-    private let maxHeightFraction: CGFloat = 0.8
     private let screenEdgeMargin: CGFloat = 20
+    /// A column never grows past this share of its screen's visible height.
+    static let maxHeightFraction: CGFloat = 0.8
+    /// A column wraps before a tile that would sit at least this share of its
+    /// height below the screen's visible bottom.
+    static let maxOffscreenFraction: CGFloat = 0.4
+
+    /// The last values `resize` laid out, so moves can re-flow the same tiles.
+    private var lastCount: Int
+    private var lastMetrics: TileMetrics
+    private var reflowWorkItem: DispatchWorkItem?
 
     init<Content: View>(rootView: Content, store: SessionStore, preferences: Preferences) {
         // `FirstMouseHostingView` opts into first-mouse handling so a click on a tile
@@ -45,15 +54,14 @@ final class DashboardWindow {
         window.isReleasedWhenClosed = false
         self.window = window
         self.preferences = preferences
+        self.lastCount = store.visibleSessions.count
+        self.lastMetrics = TileMetrics.resolve(preferences.tileSize)
 
         // Initial frame: restore the saved top-right corner if it still lives on a
         // connected screen, otherwise default to the top-right of the main screen.
-        let initialSize = desiredContentSize(
-            count: store.visibleSessions.count,
-            metrics: TileMetrics.resolve(preferences.tileSize)
-        )
-        let origin = initialOrigin(for: initialSize, saved: preferences.dashboardWindowFrame)
-        window.setFrame(NSRect(origin: origin, size: initialSize), display: false, animate: false)
+        window.setFrame(frame(count: lastCount, metrics: lastMetrics,
+                              topRight: initialTopRight(saved: preferences.dashboardWindowFrame)),
+                        display: false, animate: false)
         // From here on, only `resize`/`restoreSavedFrameIfPossible` may change the
         // window's size — see `BorderlessFloatingWindow.isSizeLocked`.
         window.isSizeLocked = true
@@ -103,35 +111,80 @@ final class DashboardWindow {
     var isVisible: Bool { window.isVisible }
 
     private func resize(count: Int, metrics: TileMetrics) {
-        let newSize = desiredContentSize(count: count, metrics: metrics)
+        lastCount = count
+        lastMetrics = metrics
         // Anchor the top-RIGHT corner so new cards grow down-and-to-the-left instead
         // of pushing the right edge outward. This matches the default top-right
         // positioning and keeps the window feeling stable when docked to that corner.
-        let oldFrame = window.frame
-        let rightX = oldFrame.origin.x + oldFrame.size.width
-        let topY = oldFrame.origin.y + oldFrame.size.height
-        let newOrigin = NSPoint(x: rightX - newSize.width, y: topY - newSize.height)
-        window.setFrameAuthorized(NSRect(origin: newOrigin, size: newSize),
-                                  display: window.isVisible)
+        let target = frame(count: count, metrics: metrics,
+                           topRight: NSPoint(x: window.frame.maxX, y: window.frame.maxY))
+        if window.frame != target {
+            window.setFrameAuthorized(target, display: window.isVisible)
+        }
     }
 
     /// Restore the saved top-right corner if the saved frame's center still lives on a
     /// connected screen. Otherwise default to the top-right of the main screen's
     /// visible frame with a small margin.
-    private func initialOrigin(for size: NSSize, saved: NSRect?) -> NSPoint {
+    private func initialTopRight(saved: NSRect?) -> NSPoint {
         if let saved {
             let center = NSPoint(x: saved.midX, y: saved.midY)
             let onScreen = NSScreen.screens.contains { $0.frame.contains(center) }
             if onScreen {
-                let rightX = saved.origin.x + saved.size.width
-                let topY = saved.origin.y + saved.size.height
-                return NSPoint(x: rightX - size.width, y: topY - size.height)
+                return NSPoint(x: saved.maxX, y: saved.maxY)
             }
         }
         let screen = NSScreen.main?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        return NSPoint(x: screen.maxX - size.width - screenEdgeMargin,
-                       y: screen.maxY - size.height - screenEdgeMargin)
+        return NSPoint(x: screen.maxX - screenEdgeMargin, y: screen.maxY - screenEdgeMargin)
+    }
+
+    /// The frame for `count` tiles hanging from `topRight`, sized for the screen
+    /// under that corner.
+    private func frame(count: Int, metrics: TileMetrics, topRight: NSPoint) -> NSRect {
+        let size: NSSize
+        if count > 0 {
+            let screenFrame = screen(under: topRight)?.visibleFrame
+                ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            size = Self.contentSize(count: count, metrics: metrics,
+                                    screenHeight: screenFrame.height,
+                                    spaceBelowTop: topRight.y - screenFrame.minY)
+        } else {
+            size = emptyStateSize
+        }
+        return NSRect(origin: NSPoint(x: topRight.x - size.width, y: topRight.y - size.height),
+                      size: size)
+    }
+
+    /// The screen the window hangs from. Sizing against `window.screen` (whichever
+    /// screen holds most of the window) or the main screen would measure a column
+    /// against a display the window doesn't start on.
+    private func screen(under topRight: NSPoint) -> NSScreen? {
+        let inside = NSPoint(x: topRight.x - 1, y: topRight.y - 1)
+        return NSScreen.screens.first { $0.frame.contains(inside) }
+            ?? window.screen
+            ?? NSScreen.main
+    }
+
+    /// Re-flow the tiles once the user stops dragging: the space below the
+    /// window's top edge decides how many rows a column holds.
+    private func scheduleReflow() {
+        reflowWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard NSEvent.pressedMouseButtons == 0 else {
+                self.scheduleReflow()  // still dragging
+                return
+            }
+            self.resize(count: self.lastCount, metrics: self.lastMetrics)
+            // The drag saved the pre-reflow frame; resize notifications arrive with
+            // no button pressed, so `observeFrameChanges` won't record this one.
+            // A stale size moves the saved center, which launch and wake restores
+            // check against the connected screens.
+            self.preferences.dashboardWindowFrame = self.window.frame
+        }
+        reflowWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     /// Persist the frame only on genuine user drags. AppKit also fires `didMove`/
@@ -147,6 +200,7 @@ final class DashboardWindow {
             guard let self else { return }
             guard NSEvent.pressedMouseButtons != 0 else { return }
             self.preferences.dashboardWindowFrame = self.window.frame
+            self.scheduleReflow()
         }
         frameObservers = [
             center.addObserver(forName: NSWindow.didMoveNotification,
@@ -204,28 +258,33 @@ final class DashboardWindow {
         let savedScreenAvailable = NSScreen.screens.contains { $0.frame.contains(savedCenter) }
         guard savedScreenAvailable else { return }
 
-        let currentSize = window.frame.size
-        let rightX = saved.origin.x + saved.size.width
-        let topY = saved.origin.y + saved.size.height
-        let target = NSRect(
-            origin: NSPoint(x: rightX - currentSize.width, y: topY - currentSize.height),
-            size: currentSize
-        )
+        // The returning screen may be a different height, so re-size as well as move.
+        let target = frame(count: lastCount, metrics: lastMetrics,
+                           topRight: NSPoint(x: saved.maxX, y: saved.maxY))
         if window.frame != target {
-            window.setFrame(target, display: window.isVisible, animate: false)
+            window.setFrameAuthorized(target, display: window.isVisible)
         }
     }
 
-    private func desiredContentSize(count: Int, metrics: TileMetrics) -> NSSize {
-        guard count > 0 else { return emptyStateSize }
-        let screenFrame = window.screen?.visibleFrame
-            ?? NSScreen.main?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let maxHeight = screenFrame.height * maxHeightFraction
-        let slot = metrics.tileSize.height + metrics.gutter
-        let usable = maxHeight - 2 * metrics.padding + metrics.gutter
+    /// Window size for `count` tiles flowing column-major. A column holds as many
+    /// rows as fit in `maxHeightFraction` of the screen, but wraps before a tile
+    /// that would be `maxOffscreenFraction` or more below the screen's visible
+    /// bottom — a window hanging from low on the screen starts a new column
+    /// instead of hiding its last cards. `spaceBelowTop` is the distance from the
+    /// window's top edge down to that visible bottom.
+    static func contentSize(count: Int, metrics: TileMetrics,
+                            screenHeight: CGFloat, spaceBelowTop: CGFloat) -> NSSize {
+        let tileHeight = metrics.tileSize.height
+        let slot = tileHeight + metrics.gutter
+        let usable = screenHeight * maxHeightFraction - 2 * metrics.padding + metrics.gutter
         let maxRows = max(1, Int(floor(usable / slot)))
-        let rows = min(count, maxRows)
+        // Row i spans `padding + i * slot` to that plus `tileHeight` below the top; it
+        // stays while less than `maxOffscreenFraction` of it is past the bottom.
+        let lastVisibleTop = spaceBelowTop - metrics.padding - (1 - maxOffscreenFraction) * tileHeight
+        let rowsOnScreen = lastVisibleTop > 0
+            ? Int(ceil(min(lastVisibleTop / slot, CGFloat(count))))
+            : 0
+        let rows = max(1, min(count, maxRows, rowsOnScreen))
         let cols = Int(ceil(Double(count) / Double(rows)))
         let interTileWidth  = CGFloat(max(0, cols - 1)) * metrics.gutter
         let interTileHeight = CGFloat(max(0, rows - 1)) * metrics.gutter
