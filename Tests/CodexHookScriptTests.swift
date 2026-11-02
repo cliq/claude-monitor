@@ -11,7 +11,8 @@ final class CodexHookScriptTests: XCTestCase {
 
     private func runScript(hook: String, stdin: String, expectEvent: Bool = true,
                            parentCommand: String? = nil, cwd: URL? = nil,
-                           codexHome: String? = nil, claudePid: pid_t? = nil) async throws -> HookEvent? {
+                           codexHome: String? = nil, claudePid: pid_t? = nil,
+                           companionSession: String? = nil) async throws -> HookEvent? {
         let scriptURL = try XCTUnwrap(findScript(), "could not find codex-hook.sh")
 
         var received: [HookEvent] = []
@@ -51,6 +52,8 @@ final class CodexHookScriptTests: XCTestCase {
         if let codexHome { env["CODEX_HOME"] = codexHome }
         // `make test` run from a Claude Code session inherits its real CLAUDE_PID.
         env["CLAUDE_PID"] = claudePid.map(String.init)
+        // The Codex companion plugin exports this into the app-servers it starts.
+        env["CODEX_COMPANION_SESSION_ID"] = companionSession
         proc.environment = env
         if let cwd { proc.currentDirectoryURL = cwd }
 
@@ -209,6 +212,57 @@ final class CodexHookScriptTests: XCTestCase {
                        "the companion's app-server outlives a Claude session that dies without SessionEnd")
     }
 
+    func test_companionTaskStopEndsItsTile() async throws {
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"review"}"#,
+            parentCommand: Self.taskAppServer, claudePid: claude.processIdentifier,
+            companionSession: "companion")
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.hook, .sessionEnd,
+                       "each companion task is a one-shot thread that never sends SessionEnd")
+
+        let store = SessionStore(clock: FakeClock())
+        store.apply(HookEvent(hook: .userPromptSubmit, sessionId: "codex:review", tty: "",
+                              pid: claude.processIdentifier, cwd: "/", ts: 0, promptPreview: "Review",
+                              toolName: nil, notificationType: nil, message: nil, provider: .codex))
+        store.apply(event)
+        XCTAssertTrue(store.orderedSessions.isEmpty, "a finished review must not linger as a Waiting tile")
+    }
+
+    func test_companionTaskPromptStillShowsWorking() async throws {
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "UserPromptSubmit", stdin: #"{"session_id":"review","prompt":"Review"}"#,
+            parentCommand: Self.taskAppServer, claudePid: claude.processIdentifier,
+            companionSession: "companion")
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.hook, .userPromptSubmit)
+    }
+
+    func test_taskAppServerOutsideClaudeCodeKeepsStop() async throws {
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#, parentCommand: Self.taskAppServer)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.hook, .stop, "an editor's chat thread continues after a turn")
+    }
+
+    func test_nonCompanionAppServerStartedFromClaudeCodeKeepsStop() async throws {
+        let claude = try launchProcess(named: "claude")
+        defer { claude.terminate() }
+
+        let received = try await runScript(
+            hook: "Stop", stdin: #"{"session_id":"s"}"#,
+            parentCommand: Self.taskAppServer, claudePid: claude.processIdentifier)
+        let event = try XCTUnwrap(received)
+        XCTAssertEqual(event.pid, claude.processIdentifier)
+        XCTAssertEqual(event.hook, .stop, "only the companion plugin's tasks are one-shot")
+    }
+
     func test_taskAppServerWhoseClaudeCLIExitedReportsTheExitedPid() async throws {
         let gone = Process()
         gone.executableURL = URL(fileURLWithPath: "/usr/bin/true")
@@ -232,6 +286,7 @@ final class CodexHookScriptTests: XCTestCase {
         let event = try XCTUnwrap(received)
         XCTAssertNotEqual(event.pid, stranger.processIdentifier, "a wrong pid would focus another program")
         XCTAssertGreaterThan(event.pid, 0)
+        XCTAssertEqual(event.hook, .stop)
     }
 
     func test_taskAppServerOutsideClaudeCodeReportsItsOwnPid() async throws {
@@ -250,6 +305,7 @@ final class CodexHookScriptTests: XCTestCase {
             hook: "Stop", stdin: #"{"session_id":"s"}"#, claudePid: claude.processIdentifier)
         let event = try XCTUnwrap(received)
         XCTAssertEqual(event.pid, getpid(), "only app-servers are re-anchored, not an interactive codex")
+        XCTAssertEqual(event.hook, .stop)
     }
 
     func test_managedDaemonParentIgnoresClaudePid() async throws {
@@ -266,6 +322,7 @@ final class CodexHookScriptTests: XCTestCase {
         let event = try XCTUnwrap(received)
         XCTAssertEqual(event.pid, tui.processIdentifier,
                        "the daemon's environment belongs to whichever session started it")
+        XCTAssertEqual(event.hook, .stop, "an interactive Codex session continues after a turn")
     }
 
     /// A long-running process whose command line starts with `name`.

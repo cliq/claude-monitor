@@ -60,6 +60,7 @@ elif printf '%s' "$PARENT_COMMAND" | grep -q 'codex app-server'; then
   # the Claude CLI instead (Claude Code exports CLAUDE_PID): its liveness is the
   # task's, and its tty and environment point at the session that is waiting.
   # A pid recycled by some other program keeps the app-server.
+  #
   case "$CLAUDE_PID" in
     ""|*[!0-9]*) ;;
     *)
@@ -67,6 +68,16 @@ elif printf '%s' "$PARENT_COMMAND" | grep -q 'codex app-server'; then
       case "$OWNER_COMMAND" in ""|*claude*) SOURCE_PID="$CLAUDE_PID" ;; esac
       ;;
   esac
+  # Each companion task (a review, a rescue) is its own one-shot thread, and
+  # Codex sends no SessionEnd when it finishes, so a long-lived Claude session
+  # would collect one "Waiting" tile per task. Its result goes back to that
+  # Claude session, so the task's Stop ends the tile; a resumed thread comes
+  # back on its next prompt. Only the companion plugin exports
+  # CODEX_COMPANION_SESSION_ID; other stdio app-servers (e.g. an editor's chat,
+  # even one started from Claude Code) keep the usual Stop → waiting.
+  if [ -n "$CODEX_COMPANION_SESSION_ID" ] && [ "$HOOK_NAME" = "Stop" ]; then
+    HOOK_NAME="SessionEnd"
+  fi
 fi
 
 # TTY: the hook JSON is piped on stdin, so `tty` on our own fd never works. Ask

@@ -10,7 +10,7 @@ settings:
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     MARKETING_VERSION: "1.10.0"
-    CURRENT_PROJECT_VERSION: "19"
+    CURRENT_PROJECT_VERSION: "20"
     # Default off for fast local iteration (no TCC prompts when driving Terminal).
     # The release workflow overrides this to YES for notarization.
     ENABLE_HARDENED_RUNTIME: NO
